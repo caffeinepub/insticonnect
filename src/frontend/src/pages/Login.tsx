@@ -1,7 +1,9 @@
-import { Eye, EyeOff, Sparkles } from "lucide-react";
+import { sendPasswordResetEmail } from "firebase/auth";
+import { Eye, EyeOff, Mail, Sparkles, X } from "lucide-react";
 import { useState } from "react";
 import { useApp } from "../App";
 import { useAuth } from "../context/AuthContext";
+import { auth } from "../utils/firebase";
 
 export default function Login() {
   const { navigate, addToast, theme } = useApp();
@@ -13,6 +15,13 @@ export default function Login() {
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
 
+  // Forgot password state
+  const [showForgotPw, setShowForgotPw] = useState(false);
+  const [resetEmail, setResetEmail] = useState("");
+  const [resetLoading, setResetLoading] = useState(false);
+  const [resetSent, setResetSent] = useState(false);
+  const [resetError, setResetError] = useState("");
+
   const signIn = async () => {
     setError("");
     if (!email.trim() || !password.trim()) {
@@ -22,7 +31,6 @@ export default function Login() {
     setLoading(true);
     try {
       await firebaseSignIn(email, password);
-      // AuthSync in App.tsx will handle setting user and navigating to home
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : "Sign in failed. Try again.";
       setError(msg.replace("Firebase: ", "").replace(/ \(auth\/.*\)\.?/, ""));
@@ -37,13 +45,41 @@ export default function Login() {
     setGoogleLoading(true);
     try {
       await signInWithGoogle();
-      // AuthSync in App.tsx will handle setting user and navigating to home
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : "Google sign in failed.";
       addToast(msg, "error");
     } finally {
       setGoogleLoading(false);
     }
+  };
+
+  const handleResetPassword = async () => {
+    setResetError("");
+    if (!resetEmail.trim()) {
+      setResetError("Please enter your email address.");
+      return;
+    }
+    setResetLoading(true);
+    try {
+      await sendPasswordResetEmail(auth, resetEmail.trim());
+      setResetSent(true);
+      addToast("Reset link sent!", "success");
+    } catch (e: unknown) {
+      const msg =
+        e instanceof Error ? e.message : "Failed to send reset email.";
+      setResetError(
+        msg.replace("Firebase: ", "").replace(/ \(auth\/.*\)\.?/, ""),
+      );
+    } finally {
+      setResetLoading(false);
+    }
+  };
+
+  const closeForgotPw = () => {
+    setShowForgotPw(false);
+    setResetEmail("");
+    setResetSent(false);
+    setResetError("");
   };
 
   const inputCls = `w-full px-4 py-3.5 rounded-2xl text-sm outline-none transition-all ${
@@ -153,6 +189,18 @@ export default function Login() {
                 }`}
               >
                 {showPw ? <EyeOff size={18} /> : <Eye size={18} />}
+              </button>
+            </div>
+
+            {/* Forgot password link */}
+            <div className="flex justify-end">
+              <button
+                type="button"
+                onClick={() => setShowForgotPw(true)}
+                className="text-xs text-purple-500 font-medium hover:text-purple-400 transition-colors"
+                data-ocid="login.open_modal_button"
+              >
+                Forgot password?
               </button>
             </div>
 
@@ -317,6 +365,156 @@ export default function Login() {
           </div>
         </div>
       </div>
+
+      {/* Forgot Password Modal */}
+      {showForgotPw && (
+        <div
+          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center px-4 pb-6 sm:pb-0"
+          data-ocid="login.dialog"
+        >
+          {/* Backdrop */}
+          <button
+            type="button"
+            aria-label="Close dialog"
+            className="absolute inset-0 bg-black/60 backdrop-blur-sm cursor-default"
+            onClick={closeForgotPw}
+          />
+
+          {/* Sheet */}
+          <div
+            className={`relative z-10 w-full max-w-[380px] rounded-3xl p-6 shadow-2xl ${
+              theme === "dark" ? "glass-dark" : "glass"
+            }`}
+          >
+            {/* Header */}
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-full bg-purple-500/20 flex items-center justify-center">
+                  <Mail size={16} className="text-purple-400" />
+                </div>
+                <h3 className="font-bold text-base">Reset Password</h3>
+              </div>
+              <button
+                type="button"
+                onClick={closeForgotPw}
+                className={`w-7 h-7 rounded-full flex items-center justify-center transition-colors ${
+                  theme === "dark"
+                    ? "bg-white/10 hover:bg-white/20 text-gray-400"
+                    : "bg-gray-100 hover:bg-gray-200 text-gray-500"
+                }`}
+                data-ocid="login.close_button"
+              >
+                <X size={14} />
+              </button>
+            </div>
+
+            {resetSent ? (
+              /* Success state */
+              <div className="text-center py-4" data-ocid="login.success_state">
+                <div className="text-4xl mb-3">📬</div>
+                <p className="font-semibold text-sm mb-1">Check your inbox!</p>
+                <p
+                  className={`text-xs ${
+                    theme === "dark" ? "text-gray-400" : "text-gray-500"
+                  }`}
+                >
+                  We sent a reset link to{" "}
+                  <span className="text-purple-500 font-medium">
+                    {resetEmail}
+                  </span>
+                </p>
+                <button
+                  type="button"
+                  onClick={closeForgotPw}
+                  className="mt-4 w-full py-3 rounded-2xl text-white font-semibold text-sm btn-gradient transition-all active:scale-[0.98]"
+                  data-ocid="login.confirm_button"
+                >
+                  Done
+                </button>
+              </div>
+            ) : (
+              /* Form state */
+              <div className="space-y-3">
+                <p
+                  className={`text-xs mb-1 ${
+                    theme === "dark" ? "text-gray-400" : "text-gray-500"
+                  }`}
+                >
+                  Enter your email and we'll send you a link to reset your
+                  password.
+                </p>
+                <input
+                  type="email"
+                  value={resetEmail}
+                  onChange={(e) => setResetEmail(e.target.value)}
+                  placeholder="your@smail.iitm.ac.in"
+                  className={inputCls}
+                  onKeyDown={(e) => e.key === "Enter" && handleResetPassword()}
+                  data-ocid="login.input"
+                />
+
+                {resetError && (
+                  <p
+                    className="text-xs text-red-500 font-medium"
+                    data-ocid="login.error_state"
+                  >
+                    {resetError}
+                  </p>
+                )}
+
+                <button
+                  type="button"
+                  onClick={handleResetPassword}
+                  disabled={resetLoading}
+                  className="w-full py-3.5 rounded-2xl text-white font-semibold text-sm btn-gradient transition-all active:scale-[0.98] disabled:opacity-70"
+                  data-ocid="login.submit_button"
+                >
+                  {resetLoading ? (
+                    <span className="flex items-center justify-center gap-2">
+                      <svg
+                        className="animate-spin h-4 w-4"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        aria-hidden="true"
+                      >
+                        <circle
+                          className="opacity-25"
+                          cx="12"
+                          cy="12"
+                          r="10"
+                          stroke="currentColor"
+                          strokeWidth="4"
+                        />
+                        <path
+                          className="opacity-75"
+                          fill="currentColor"
+                          d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+                        />
+                      </svg>
+                      Sending...
+                    </span>
+                  ) : (
+                    "Send Reset Link"
+                  )}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={closeForgotPw}
+                  className={`w-full py-3 rounded-2xl text-sm font-medium transition-all active:scale-[0.98] ${
+                    theme === "dark"
+                      ? "bg-white/5 text-gray-400 hover:bg-white/10"
+                      : "bg-gray-100 text-gray-500 hover:bg-gray-200"
+                  }`}
+                  data-ocid="login.cancel_button"
+                >
+                  Cancel
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
