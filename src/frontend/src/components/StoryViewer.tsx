@@ -1,7 +1,9 @@
-import { Send, X } from "lucide-react";
+import { Send, Trash2, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useApp } from "../App";
+import { useAuth } from "../context/AuthContext";
 import type { Story } from "../mockData";
+import { deleteStory } from "../utils/firebaseService";
 
 interface Props {
   stories: Story[];
@@ -17,10 +19,13 @@ export default function StoryViewer({
   onProfileTap,
 }: Props) {
   const { addToast } = useApp();
+  const { currentFirebaseUser } = useAuth();
   const [current, setCurrent] = useState(startIndex);
   const [reply, setReply] = useState("");
   const barRef = useRef<HTMLDivElement>(null);
   const story = stories[current];
+  const isOwnStory =
+    !!currentFirebaseUser && story?.userId === currentFirebaseUser.uid;
   const DURATION = 5000;
 
   useEffect(() => {
@@ -58,6 +63,15 @@ export default function StoryViewer({
       addToast(`Replied to ${story.username}!`, "success");
       setReply("");
     }
+  };
+
+  const handleDeleteStory = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!window.confirm("Delete this story?")) return;
+    await deleteStory(story.id);
+    addToast("Story deleted", "success");
+    if (current < stories.length - 1) setCurrent((c) => c + 1);
+    else onClose();
   };
 
   if (!story) return null;
@@ -168,16 +182,28 @@ export default function StoryViewer({
               <p className="text-white/70 text-xs">{story.time} ago</p>
             </div>
           </button>
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              onClose();
-            }}
-            className="text-white p-1"
-          >
-            <X size={24} />
-          </button>
+          <div className="flex items-center gap-1">
+            {isOwnStory && (
+              <button
+                type="button"
+                onClick={handleDeleteStory}
+                className="text-white p-1"
+                data-ocid="story.delete_button"
+              >
+                <Trash2 size={22} />
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onClose();
+              }}
+              className="text-white p-1"
+            >
+              <X size={24} />
+            </button>
+          </div>
         </div>
 
         {/* Reply bar */}

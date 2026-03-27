@@ -9,16 +9,16 @@ import {
   UserCheck,
   UserPlus,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useApp } from "../App";
 import PostDetailModal from "../components/PostDetailModal";
 import StoryViewer from "../components/StoryViewer";
-import {
-  posts as allPosts,
-  stories as allStories,
-  mockUsers,
-} from "../mockData";
 import type { Post, Story, User } from "../mockData";
+import {
+  getUserById,
+  subscribeToPosts,
+  subscribeToStories,
+} from "../utils/firebaseService";
 
 type TabKey = "posts" | "saved" | "liked";
 
@@ -34,10 +34,14 @@ export default function OtherProfile() {
   } = useApp();
   const userId = pageMeta.userId as string | undefined;
 
-  const user: User | undefined = useMemo(
-    () => mockUsers.find((u) => u.id === userId),
-    [userId],
-  );
+  const [user, setUser] = useState<User | undefined>(undefined);
+
+  useEffect(() => {
+    if (!userId) return;
+    getUserById(userId).then((u) => {
+      if (u) setUser(u);
+    });
+  }, [userId]);
 
   const [isFollowing, setIsFollowing] = useState(false);
   const [followerCount, setFollowerCount] = useState(user?.followers ?? 0);
@@ -51,31 +55,22 @@ export default function OtherProfile() {
     if (!user) return;
     setFollowerCount(user.followers);
     setIsFollowing(false);
-    const up = allPosts.filter((p) => p.userId === user.id);
-    if (up.length === 0) {
-      setUserPosts(
-        Array.from({ length: 6 }, (_, i) => ({
-          id: `op-${user.id}-${i}`,
-          userId: user.id,
-          username: user.username,
-          avatar: user.avatar,
-          image: `https://picsum.photos/seed/${user.username}${i}/600/600`,
-          caption: "Check this out! ✨",
-          likes: Math.floor(Math.random() * 300) + 20,
-          liked: false,
-          saved: false,
-          comments: [],
-          time: `${i + 1}d`,
-          isAnonymous: false,
-          isPrivate: false,
-        })),
-      );
-    } else {
-      setUserPosts(up);
-    }
-    const us = allStories.filter((s) => s.userId === user.id);
-    setUserStories(us);
   }, [user]);
+
+  // Subscribe to this user's posts and stories from Firestore
+  useEffect(() => {
+    if (!userId) return;
+    const unsubPosts = subscribeToPosts((allPosts) => {
+      setUserPosts(allPosts.filter((p) => p.userId === userId));
+    });
+    const unsubStories = subscribeToStories((allStories) => {
+      setUserStories(allStories.filter((s) => s.userId === userId));
+    });
+    return () => {
+      unsubPosts();
+      unsubStories();
+    };
+  }, [userId]);
 
   const toggleFollow = () => {
     setIsFollowing((f) => {

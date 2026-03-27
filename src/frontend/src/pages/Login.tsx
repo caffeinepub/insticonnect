@@ -2,11 +2,9 @@ import { Eye, EyeOff, Sparkles } from "lucide-react";
 import { useState } from "react";
 import { useApp } from "../App";
 import { useAuth } from "../context/AuthContext";
-import { currentUser as mockUser } from "../mockData";
-import { isFirebaseConfigured } from "../utils/firebase";
 
 export default function Login() {
-  const { setUser, navigate, addToast, theme } = useApp();
+  const { navigate, addToast, theme } = useApp();
   const { signIn: firebaseSignIn, signInWithGoogle } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -22,49 +20,29 @@ export default function Login() {
       return;
     }
     setLoading(true);
-    if (isFirebaseConfigured()) {
-      try {
-        await firebaseSignIn(email, password);
-        setUser(mockUser);
-        navigate("home");
-      } catch (e: unknown) {
-        const msg =
-          e instanceof Error ? e.message : "Sign in failed. Try again.";
-        setError(msg.replace("Firebase: ", "").replace(/ \(auth\/.*\)\.?/, ""));
-        addToast("Sign in failed", "error");
-      } finally {
-        setLoading(false);
-      }
-    } else {
-      // Mock sign-in when Firebase not configured
-      setTimeout(() => {
-        setLoading(false);
-        setUser(mockUser);
-        navigate("home");
-      }, 900);
+    try {
+      await firebaseSignIn(email, password);
+      // AuthSync in App.tsx will handle setting user and navigating to home
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "Sign in failed. Try again.";
+      setError(msg.replace("Firebase: ", "").replace(/ \(auth\/.*\)\.?/, ""));
+      addToast("Sign in failed", "error");
+    } finally {
+      setLoading(false);
     }
   };
 
   const handleGoogle = async () => {
     setError("");
     setGoogleLoading(true);
-    if (isFirebaseConfigured()) {
-      try {
-        await signInWithGoogle();
-        setUser(mockUser);
-        navigate("home");
-      } catch (e: unknown) {
-        const msg = e instanceof Error ? e.message : "Google sign in failed.";
-        addToast(msg, "error");
-      } finally {
-        setGoogleLoading(false);
-      }
-    } else {
-      setTimeout(() => {
-        setGoogleLoading(false);
-        setUser(mockUser);
-        navigate("home");
-      }, 900);
+    try {
+      await signInWithGoogle();
+      // AuthSync in App.tsx will handle setting user and navigating to home
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "Google sign in failed.";
+      addToast(msg, "error");
+    } finally {
+      setGoogleLoading(false);
     }
   };
 
@@ -334,7 +312,7 @@ export default function Login() {
                 : "bg-white/80 border border-gray-200 text-gray-500"
             }`}
           >
-            <span>🏛️</span>
+            <span>🏙️</span>
             <span>IIT Madras Campus Network</span>
           </div>
         </div>

@@ -8,9 +8,10 @@ import {
   X,
 } from "lucide-react";
 import { useRef, useState } from "react";
-import { currentUser } from "../mockData";
+import { useAuth } from "../context/AuthContext";
 import type { Story } from "../mockData";
-import { CLOUDINARY_CONFIG, uploadToCloudinary } from "../utils/cloudinary";
+import { uploadToCloudinary } from "../utils/cloudinary";
+import { addStory } from "../utils/firebaseService";
 
 interface StoryCreatorProps {
   onPublish: (story: Story) => void;
@@ -56,6 +57,7 @@ export default function StoryCreator({
   const [dragging, setDragging] = useState(false);
   const [showColorPicker, setShowColorPicker] = useState(false);
   const [showTextColors, setShowTextColors] = useState(false);
+  const { userProfile } = useAuth();
   const [showHighlightPrompt, setShowHighlightPrompt] = useState(false);
   const [highlightName, setHighlightName] = useState("");
   const [pendingStories, setPendingStories] = useState<Story[]>([]);
@@ -123,9 +125,9 @@ export default function StoryCreator({
       return [
         {
           id: Math.random().toString(36).slice(2),
-          userId: currentUser.id,
-          username: currentUser.username,
-          avatar: currentUser.avatar,
+          userId: userProfile?.id ?? "unknown",
+          username: userProfile?.username ?? "user",
+          avatar: userProfile?.avatar ?? "",
           storyBg: bgGradient,
           storyText: textValue || undefined,
           storyTextColor: textColor,
@@ -137,9 +139,9 @@ export default function StoryCreator({
     }
     return resolvedImages.map((img) => ({
       id: Math.random().toString(36).slice(2),
-      userId: currentUser.id,
-      username: currentUser.username,
-      avatar: currentUser.avatar,
+      userId: userProfile?.id ?? "unknown",
+      username: userProfile?.username ?? "user",
+      avatar: userProfile?.avatar ?? "",
       image: img,
       storyText: textValue || undefined,
       storyTextColor: textColor,
@@ -151,10 +153,7 @@ export default function StoryCreator({
 
   const handlePublish = async () => {
     let resolvedImages = [...images];
-    if (
-      CLOUDINARY_CONFIG.cloudName !== "YOUR_CLOUD_NAME" &&
-      rawFilesRef.current.length > 0
-    ) {
+    if (rawFilesRef.current.length > 0) {
       setUploading(true);
       try {
         const urls = await Promise.all(
@@ -180,6 +179,7 @@ export default function StoryCreator({
   };
 
   const confirmPublish = (_addToHL: boolean) => {
+    for (const s of pendingStories) addStory(s);
     for (const s of pendingStories) onPublish(s);
     setShowHighlightPrompt(false);
   };

@@ -1,16 +1,9 @@
-// =============================================================
-// Cloudinary Configuration
-// Replace the values below with your actual Cloudinary credentials
-// from https://console.cloudinary.com → Dashboard
-// =============================================================
-
 export const CLOUDINARY_CONFIG = {
-  cloudName: "YOUR_CLOUD_NAME",
-  uploadPreset: "YOUR_UPLOAD_PRESET", // create an unsigned preset in Cloudinary dashboard
-  apiKey: "YOUR_API_KEY", // only needed for signed uploads
+  cloudName: "dfdj9xxg2",
+  uploadPreset: "nhcqoul1",
+  apiKey: "",
 };
 
-// Upload a file to Cloudinary (unsigned upload)
 export async function uploadToCloudinary(
   file: File,
   folder = "insticonnect",
@@ -48,7 +41,6 @@ export async function uploadToCloudinary(
   });
 }
 
-// Delete an image by publicId (requires signed delete or server-side call)
 export function getCloudinaryUrl(
   publicId: string,
   options?: {
@@ -70,12 +62,3 @@ export function getCloudinaryUrl(
 
   return `https://res.cloudinary.com/${CLOUDINARY_CONFIG.cloudName}/image/upload/${transforms}/${publicId}`;
 }
-
-// --------------- Integration with CreatePost / StoryCreator ---------------
-//
-// In CreatePost.tsx, replace the local URL.createObjectURL call with:
-//
-//   const { url } = await uploadToCloudinary(file, "posts", (p) => setProgress(p));
-//   setImage(url); // url is a persistent Cloudinary CDN URL
-//
-// And save `url` in Firestore alongside the post document.

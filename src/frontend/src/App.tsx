@@ -9,7 +9,7 @@ import {
 import BottomNav from "./components/BottomNav";
 import Toast from "./components/Toast";
 import TopBar from "./components/TopBar";
-import { AuthProvider } from "./context/AuthContext";
+import { AuthProvider, useAuth } from "./context/AuthContext";
 import type { Post, User } from "./mockData";
 import Chat from "./pages/Chat";
 import ChatScreen from "./pages/ChatScreen";
@@ -72,6 +72,28 @@ interface AppContextType {
 
 export const AppContext = createContext<AppContextType>(null!);
 export const useApp = () => useContext(AppContext);
+
+// Bridge: syncs Firebase auth state -> AppContext user and handles navigation
+function AuthSync() {
+  const { userProfile, loading } = useAuth();
+  const { setUser, page, navigate } = useApp();
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: page/navigate/setUser are stable
+  useEffect(() => {
+    if (loading) return;
+    if (userProfile) {
+      setUser(userProfile);
+      if (page === "login" || page === "onboarding") {
+        navigate("home");
+      }
+    } else {
+      setUser(null);
+      navigate("login");
+    }
+  }, [userProfile, loading]);
+
+  return null;
+}
 
 const PAGES_WITH_NAV: Page[] = ["home", "plans", "discuss", "chat", "profile"];
 const PAGES_NO_TOP: Page[] = [
@@ -321,6 +343,9 @@ export default function App() {
           setShowLikedPosts,
         }}
       >
+        {/* Sync Firebase auth state -> AppContext */}
+        <AuthSync />
+
         <div
           className={`blob-bg min-h-screen font-[Outfit,sans-serif] relative ${
             theme === "dark"

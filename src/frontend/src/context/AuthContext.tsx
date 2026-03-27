@@ -16,7 +16,6 @@ import {
   useState,
 } from "react";
 import type { ReactNode } from "react";
-import { currentUser as mockCurrentUser } from "../mockData";
 import type { User } from "../mockData";
 import { auth, db, isFirebaseConfigured } from "../utils/firebase";
 
@@ -48,7 +47,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const fetchUserProfile = useCallback(
     async (fbUser: FirebaseUser): Promise<User> => {
-      if (!isFirebaseConfigured()) return mockCurrentUser;
       try {
         const snap = await getDoc(doc(db, "users", fbUser.uid));
         if (snap.exists()) {
@@ -76,7 +74,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return profile;
       } catch (e) {
         console.warn("[AuthContext] fetchUserProfile failed", e);
-        return mockCurrentUser;
+        throw e;
       }
     },
     [],

@@ -2,8 +2,6 @@ import { ChevronLeft, Eye, EyeOff } from "lucide-react";
 import { useState } from "react";
 import { useApp } from "../App";
 import { useAuth } from "../context/AuthContext";
-import { currentUser } from "../mockData";
-import { isFirebaseConfigured } from "../utils/firebase";
 
 const SUGGESTIONS = [
   "aryan_iitm",
@@ -36,7 +34,7 @@ function Toggle({
 }
 
 export default function Onboarding() {
-  const { setUser, addToast, theme } = useApp();
+  const { addToast, theme } = useApp();
   const { signUp } = useAuth();
   const [step, setStep] = useState(0);
   const [email, setEmail] = useState("");
@@ -116,17 +114,14 @@ export default function Onboarding() {
   };
 
   const finish = async () => {
-    if (isFirebaseConfigured() && password) {
-      try {
-        await signUp(email, password, username, name);
-      } catch (e: unknown) {
-        const msg = e instanceof Error ? e.message : "Sign up failed";
-        addToast(msg.replace("Firebase: ", ""), "error");
-        return;
-      }
+    try {
+      await signUp(email, password, username, name);
+      // AuthSync in App.tsx will handle setting user and navigating to home
+      addToast("Welcome to InstiConnect! 🎉", "success");
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "Sign up failed";
+      addToast(msg.replace("Firebase: ", ""), "error");
     }
-    setUser({ ...currentUser, name, username, email });
-    addToast("Welcome to InstiConnect! 🎉", "success");
   };
 
   const bg = theme === "dark" ? "bg-[#0D0F14]" : "bg-[#F6F8FB]";

@@ -5,6 +5,7 @@ import {
   ChevronRight,
   Clock,
   Grid3X3,
+  LogOut,
   MoreHorizontal,
   Settings,
   Smartphone,
@@ -15,13 +16,17 @@ import { useEffect, useRef, useState } from "react";
 import { useApp } from "../App";
 import PostDetailModal from "../components/PostDetailModal";
 import StoryViewer from "../components/StoryViewer";
-import {
-  currentUserHighlights,
-  currentUser as mockCurrentUser,
-  userPostImages,
-} from "../mockData";
+import { useAuth } from "../context/AuthContext";
 import type { Highlight, Post, User } from "../mockData";
-import { CLOUDINARY_CONFIG, uploadToCloudinary } from "../utils/cloudinary";
+import { uploadToCloudinary } from "../utils/cloudinary";
+import {
+  addHighlight as fbAddHighlight,
+  deleteHighlight as fbDeleteHighlight,
+  deletePost as fbDeletePost,
+  updateUserProfile as fbUpdateUserProfile,
+  subscribeToHighlights,
+  subscribeToPosts,
+} from "../utils/firebaseService";
 
 const USERNAME_COOLDOWN_MS = 30 * 24 * 60 * 60 * 1000;
 
@@ -31,239 +36,32 @@ function daysUntilUsernameChange(lastChanged: number | undefined): number {
   return diff > 0 ? Math.ceil(diff / (1000 * 60 * 60 * 24)) : 0;
 }
 
-// 9 mock posts for the current user
-const MY_POSTS: Post[] = [
-  {
-    id: "mp1",
-    userId: "1",
-    username: "aryan_s",
-    avatar: "https://picsum.photos/seed/user1/100/100",
-    image: "https://picsum.photos/seed/mypost1/600/600",
-    caption: "Golden hour at the OAT ✨ #CampusVibes #IITMadras",
-    likes: 284,
-    liked: false,
-    saved: false,
-    time: "2h",
-    isAnonymous: false,
-    isPrivate: false,
-    comments: [
-      {
-        id: "mc1",
-        username: "priya_r",
-        avatar: "https://picsum.photos/seed/av2/100/100",
-        text: "Stunning shot! 😍",
-        time: "1h",
-        likes: 12,
-      },
-      {
-        id: "mc2",
-        username: "karthik_m",
-        avatar: "https://picsum.photos/seed/av3/100/100",
-        text: "Campus life 🔥",
-        time: "45m",
-        likes: 5,
-      },
-    ],
-  },
-  {
-    id: "mp2",
-    userId: "1",
-    username: "aryan_s",
-    avatar: "https://picsum.photos/seed/user1/100/100",
-    image: "https://picsum.photos/seed/mypost2/600/600",
-    caption: "Late night coding sessions hit different ☕💻",
-    likes: 198,
-    liked: false,
-    saved: false,
-    time: "1d",
-    isAnonymous: false,
-    isPrivate: false,
-    comments: [
-      {
-        id: "mc3",
-        username: "dev_nerd",
-        avatar: "https://picsum.photos/seed/av4/100/100",
-        text: "Same bro 😭",
-        time: "20h",
-        likes: 8,
-      },
-    ],
-  },
-  {
-    id: "mp3",
-    userId: "1",
-    username: "aryan_s",
-    avatar: "https://picsum.photos/seed/user1/100/100",
-    image: "https://picsum.photos/seed/mypost3/600/600",
-    caption: "Hackathon winners 🏆🎉 #Hack4IITM",
-    likes: 312,
-    liked: false,
-    saved: false,
-    time: "3d",
-    isAnonymous: false,
-    isPrivate: false,
-    comments: [
-      {
-        id: "mc4",
-        username: "sneha_k",
-        avatar: "https://picsum.photos/seed/av5/100/100",
-        text: "Congrats!! 🎊",
-        time: "2d",
-        likes: 20,
-      },
-      {
-        id: "mc5",
-        username: "rohan_v",
-        avatar: "https://picsum.photos/seed/av7/100/100",
-        text: "Deserved!!",
-        time: "2d",
-        likes: 15,
-      },
-    ],
-  },
-  {
-    id: "mp4",
-    userId: "1",
-    username: "aryan_s",
-    avatar: "https://picsum.photos/seed/user1/100/100",
-    image: "https://picsum.photos/seed/mypost4/600/600",
-    caption: "Mess food appreciation post 😅 #SurpriseHit",
-    likes: 87,
-    liked: false,
-    saved: false,
-    time: "5d",
-    isAnonymous: false,
-    isPrivate: false,
-    comments: [],
-  },
-  {
-    id: "mp5",
-    userId: "1",
-    username: "aryan_s",
-    avatar: "https://picsum.photos/seed/user1/100/100",
-    image: "https://picsum.photos/seed/mypost5/600/600",
-    caption: "Morning jog around the lake 🏃 #FitnessGoals",
-    likes: 153,
-    liked: false,
-    saved: false,
-    time: "1w",
-    isAnonymous: false,
-    isPrivate: false,
-    comments: [
-      {
-        id: "mc6",
-        username: "priya_r",
-        avatar: "https://picsum.photos/seed/av2/100/100",
-        text: "So inspiring!",
-        time: "6d",
-        likes: 4,
-      },
-    ],
-  },
-  {
-    id: "mp6",
-    userId: "1",
-    username: "aryan_s",
-    avatar: "https://picsum.photos/seed/user1/100/100",
-    image: "https://picsum.photos/seed/mypost6/600/600",
-    caption: "Team dinner before the big presentation 🍕",
-    likes: 229,
-    liked: false,
-    saved: false,
-    time: "2w",
-    isAnonymous: false,
-    isPrivate: false,
-    comments: [],
-  },
-  {
-    id: "mp7",
-    userId: "1",
-    username: "aryan_s",
-    avatar: "https://picsum.photos/seed/user1/100/100",
-    image: "https://picsum.photos/seed/mypost7/600/600",
-    caption: "Library grind mode activated 📚 #ExamSeason",
-    likes: 64,
-    liked: false,
-    saved: false,
-    time: "3w",
-    isAnonymous: false,
-    isPrivate: false,
-    comments: [
-      {
-        id: "mc7",
-        username: "karthik_m",
-        avatar: "https://picsum.photos/seed/av3/100/100",
-        text: "Same energy here 😤",
-        time: "3w",
-        likes: 3,
-      },
-    ],
-  },
-  {
-    id: "mp8",
-    userId: "1",
-    username: "aryan_s",
-    avatar: "https://picsum.photos/seed/user1/100/100",
-    image: "https://picsum.photos/seed/mypost8/600/600",
-    caption: "Open Air Theatre at night — best spot on campus 🌙",
-    likes: 276,
-    liked: false,
-    saved: false,
-    time: "1mo",
-    isAnonymous: false,
-    isPrivate: false,
-    comments: [
-      {
-        id: "mc8",
-        username: "anika_s",
-        avatar: "https://picsum.photos/seed/av6/100/100",
-        text: "Favourite place ever 🥺",
-        time: "1mo",
-        likes: 18,
-      },
-    ],
-  },
-  {
-    id: "mp9",
-    userId: "1",
-    username: "aryan_s",
-    avatar: "https://picsum.photos/seed/user1/100/100",
-    image: "https://picsum.photos/seed/mypost9/600/600",
-    caption: "First day of sem vibes 😊 #NewBeginnings",
-    likes: 95,
-    liked: false,
-    saved: false,
-    time: "2mo",
-    isAnonymous: false,
-    isPrivate: false,
-    comments: [],
-  },
-];
-
-const SAVED_IMAGES = [
-  "https://picsum.photos/seed/saved1/300/300",
-  "https://picsum.photos/seed/saved2/300/300",
-  "https://picsum.photos/seed/saved3/300/300",
-  "https://picsum.photos/seed/saved4/300/300",
-  "https://picsum.photos/seed/saved5/300/300",
-  "https://picsum.photos/seed/saved6/300/300",
-];
-
-const TAGGED_IMAGES = [
-  "https://picsum.photos/seed/tag1/300/300",
-  "https://picsum.photos/seed/tag2/300/300",
-  "https://picsum.photos/seed/tag3/300/300",
-  "https://picsum.photos/seed/tag4/300/300",
-  "https://picsum.photos/seed/tag5/300/300",
-  "https://picsum.photos/seed/tag6/300/300",
-];
-
 // Highlights from mockData
 
+const SAVED_IMAGES: string[] = [];
+const TAGGED_IMAGES: string[] = [];
+
 export default function Profile() {
-  const { theme, navigate, addToast } = useApp();
+  const {
+    theme,
+    navigate,
+    addToast,
+    user: appUser,
+    setUser: setAppUser,
+  } = useApp();
+  const { signOut: firebaseSignOut, currentFirebaseUser } = useAuth();
   const [tab, setTab] = useState<"posts" | "saved" | "tagged">("posts");
-  const [user, setUser] = useState<User>(mockCurrentUser);
+  const user: User = appUser ?? {
+    id: "",
+    name: "",
+    username: "",
+    email: "",
+    avatar: "",
+    bio: "",
+    followers: 0,
+    following: 0,
+    posts: 0,
+  };
   const [editOpen, setEditOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [deferredPrompt, setDeferredPrompt] = useState<Event | null>(null);
@@ -293,11 +91,27 @@ export default function Profile() {
       addToast("InstiConnect added to home screen!", "success");
     setDeferredPrompt(null);
   };
-  const [myPosts, setMyPosts] = useState<Post[]>(MY_POSTS);
+  const [myPosts, setMyPosts] = useState<Post[]>([]);
   const [selectedPost, setSelectedPost] = useState<Post | null>(null);
-  const [highlights, setHighlights] = useState<Highlight[]>(
-    currentUserHighlights,
-  );
+
+  // Subscribe to this user's posts from Firestore
+  useEffect(() => {
+    if (!user.id) return;
+    const unsub = subscribeToPosts((allPosts) => {
+      setMyPosts(allPosts.filter((p) => p.userId === user.id));
+    });
+    return unsub;
+  }, [user.id]);
+
+  // Subscribe to highlights from Firestore
+  useEffect(() => {
+    if (!user.id) return;
+    const unsub = subscribeToHighlights(user.id, (items) =>
+      setHighlights(items),
+    );
+    return unsub;
+  }, [user.id]);
+  const [highlights, setHighlights] = useState<Highlight[]>([]);
   const [viewingHighlight, setViewingHighlight] = useState<Highlight | null>(
     null,
   );
@@ -333,18 +147,16 @@ export default function Profile() {
     const localUrl = URL.createObjectURL(file);
     setEditAvatar(localUrl);
     e.target.value = "";
-    // Upload to Cloudinary if configured
-    if (CLOUDINARY_CONFIG.cloudName !== "YOUR_CLOUD_NAME") {
-      try {
-        const { url } = await uploadToCloudinary(file, "avatars");
-        setEditAvatar(url);
-      } catch {
-        // Keep local blob URL on upload failure
-      }
+    // Upload to Cloudinary
+    try {
+      const { url } = await uploadToCloudinary(file, "avatars");
+      setEditAvatar(url);
+    } catch {
+      // Keep local blob URL on upload failure
     }
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     const trimName = editName.trim();
     const trimUsername = editUsername.trim().replace(/^@/, "");
     const trimBio = editBio.trim();
@@ -374,16 +186,28 @@ export default function Profile() {
       return;
     }
 
-    setUser((u) => ({
-      ...u,
+    const updated = {
+      ...user,
       name: trimName,
       username: trimUsername,
       bio: trimBio,
       avatar: editAvatar,
-      usernameLastChanged: usernameChanged ? Date.now() : u.usernameLastChanged,
-    }));
+      usernameLastChanged: usernameChanged
+        ? Date.now()
+        : user.usernameLastChanged,
+    };
+    setAppUser(updated);
+    if (currentFirebaseUser) {
+      await fbUpdateUserProfile(currentFirebaseUser.uid, updated);
+    }
     setEditOpen(false);
     addToast("Profile updated!", "success");
+  };
+
+  const handleSignOut = async () => {
+    await firebaseSignOut();
+    setAppUser(null);
+    navigate("login");
   };
 
   const handlePostUpdate = (updated: Post) => {
@@ -392,7 +216,8 @@ export default function Profile() {
   };
 
   const handlePostDelete = (postId: string) => {
-    setMyPosts((prev) => prev.filter((p) => p.id !== postId));
+    fbDeletePost(postId);
+    // Firestore subscription will update state automatically
   };
 
   return (
@@ -452,6 +277,17 @@ export default function Profile() {
                     data-ocid="profile.link"
                   >
                     <Bookmark size={16} /> Archive
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMenuOpen(false);
+                      void handleSignOut();
+                    }}
+                    className="w-full flex items-center gap-3 px-4 py-3 text-sm font-semibold text-red-500"
+                    data-ocid="profile.delete_button"
+                  >
+                    <LogOut size={16} /> Sign Out
                   </button>
                 </div>
               </>

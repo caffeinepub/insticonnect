@@ -9,9 +9,10 @@ import {
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useApp } from "../App";
-import { currentUser } from "../mockData";
+import { useAuth } from "../context/AuthContext";
 import type { Post } from "../mockData";
-import { CLOUDINARY_CONFIG, uploadToCloudinary } from "../utils/cloudinary";
+import { uploadToCloudinary } from "../utils/cloudinary";
+import { addPost } from "../utils/firebaseService";
 
 interface CreatePostProps {
   onPost: (post: Post) => void;
@@ -19,7 +20,9 @@ interface CreatePostProps {
 }
 
 export default function CreatePost({ onPost, onClose }: CreatePostProps) {
-  const { theme, addToast } = useApp();
+  const { theme, addToast, user: appUser } = useApp();
+  const { userProfile } = useAuth();
+  const realUser = userProfile ?? appUser;
   const [step, setStep] = useState<1 | 2>(1);
   const [images, setImages] = useState<string[]>([]);
   const [activeIdx, setActiveIdx] = useState(0);
@@ -37,7 +40,6 @@ export default function CreatePost({ onPost, onClose }: CreatePostProps) {
   const textClass = isDark ? "text-white" : "text-gray-900";
   const sub = isDark ? "text-gray-400" : "text-gray-500";
 
-  // Auto-open gallery on mount
   useEffect(() => {
     const t = setTimeout(() => fileRef.current?.click(), 100);
     return () => clearTimeout(t);
@@ -78,11 +80,7 @@ export default function CreatePost({ onPost, onClose }: CreatePostProps) {
 
   const handleShare = async () => {
     let finalImages = [...images];
-
-    if (
-      CLOUDINARY_CONFIG.cloudName !== "YOUR_CLOUD_NAME" &&
-      rawFilesRef.current.length > 0
-    ) {
+    if (rawFilesRef.current.length > 0) {
       setUploading(true);
       try {
         const uploadedUrls = await Promise.all(
@@ -91,10 +89,14 @@ export default function CreatePost({ onPost, onClose }: CreatePostProps) {
               setUploadProgress(
                 Math.round(((i + p / 100) / rawFilesRef.current.length) * 100),
               );
-            }).then((r) => r.url),
+            }).then((r) => {
+              console.log("[Cloudinary] Upload result:", r.url);
+              return r.url;
+            }),
           ),
         );
         finalImages = uploadedUrls;
+        console.log("[Cloudinary] All images uploaded:", finalImages);
       } catch {
         addToast("Image upload failed, using local preview", "error");
       } finally {
@@ -103,22 +105,30 @@ export default function CreatePost({ onPost, onClose }: CreatePostProps) {
       }
     }
 
-    const newPost: Post = {
-      id: Math.random().toString(36).slice(2),
-      userId: currentUser.id,
-      username: currentUser.username,
-      avatar: currentUser.avatar,
+    const postData = {
+      userId: realUser?.id ?? "unknown",
+      username: isAnon ? "anonymous" : (realUser?.username ?? "user"),
+      avatar: isAnon
+        ? "https://api.dicebear.com/7.x/shapes/svg?seed=anon"
+        : (realUser?.avatar ?? ""),
       image: finalImages[0] || undefined,
       images: finalImages.length > 0 ? finalImages : undefined,
       caption: buildCaption(),
       likes: 0,
       liked: false,
+      likedBy: [],
       saved: false,
       comments: [],
       time: "just now",
       isAnonymous: isAnon,
       isPrivate: false,
     };
+
+    // Save to Firestore
+    console.log("[CreatePost] Saving to Firestore...", postData);
+    const docId = await addPost(postData as any);
+    console.log("[CreatePost] Saved with ID:", docId);
+    const newPost: Post = { ...postData, id: docId };
     onPost(newPost);
   };
 
@@ -176,14 +186,12 @@ export default function CreatePost({ onPost, onClose }: CreatePostProps) {
       {/* Step 1: Image selection */}
       {step === 1 && (
         <div className="flex-1 flex flex-col overflow-hidden">
-          {/* Main image preview */}
           <div
             className="relative w-full flex-shrink-0 overflow-hidden"
             style={{ aspectRatio: "1/1" }}
           >
             {images.length > 0 ? (
               <>
-                {/* Blurred background layer */}
                 <img
                   src={images[activeIdx]}
                   alt=""
@@ -192,7 +200,6 @@ export default function CreatePost({ onPost, onClose }: CreatePostProps) {
                   style={{ filter: "blur(20px)", opacity: 0.6 }}
                 />
                 <div className="absolute inset-0 bg-black/30" />
-                {/* Actual image on top */}
                 <img
                   src={images[activeIdx]}
                   alt="selected"
@@ -205,7 +212,6 @@ export default function CreatePost({ onPost, onClose }: CreatePostProps) {
                 )}
               </>
             ) : (
-              /* Enhanced empty state */
               <button
                 type="button"
                 onClick={() => fileRef.current?.click()}
@@ -248,7 +254,6 @@ export default function CreatePost({ onPost, onClose }: CreatePostProps) {
             )}
           </div>
 
-          {/* Thumbnail strip + add */}
           <div
             className={`flex gap-2 p-3 overflow-x-auto border-t ${
               isDark ? "border-white/5" : "border-gray-100"
@@ -300,7 +305,10 @@ export default function CreatePost({ onPost, onClose }: CreatePostProps) {
         <div className="flex-1 overflow-y-auto">
           <div className="flex items-start gap-3 px-4 py-4">
             <img
-              src={currentUser.avatar}
+              src={
+                realUser?.avatar ??
+                "https://api.dicebear.com/7.x/shapes/svg?seed=me"
+              }
               alt="me"
               className="w-10 h-10 rounded-full object-cover flex-shrink-0"
             />
@@ -355,7 +363,6 @@ export default function CreatePost({ onPost, onClose }: CreatePostProps) {
               />
             </div>
 
-            {/* Anonymous toggle */}
             <div
               className={`flex items-center justify-between py-3 border-t ${
                 isDark ? "border-white/5" : "border-gray-100"

@@ -25,6 +25,7 @@ export interface Story {
   storyTextBold?: boolean;
   time: string;
   viewed: boolean;
+  expiresAt?: number;
 }
 
 export interface Post {

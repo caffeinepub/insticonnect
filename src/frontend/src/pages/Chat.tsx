@@ -1,26 +1,51 @@
 import { Check, ChevronDown, ChevronUp, Users, X } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useApp } from "../App";
-import {
-  chats as mockChats,
-  groupChats as mockGroupChats,
-  plans,
-} from "../mockData";
+import { useAuth } from "../context/AuthContext";
 import type { ChatConversation } from "../mockData";
+import { subscribeToUserChats } from "../utils/firebaseService";
 
 export default function Chat() {
   const { theme, navigate, addToast } = useApp();
-  const [chats, setChats] = useState<ChatConversation[]>(mockChats);
+  const { currentFirebaseUser } = useAuth();
+  const [chats, setChats] = useState<ChatConversation[]>([]);
+
+  useEffect(() => {
+    if (!currentFirebaseUser) return;
+    const uid = currentFirebaseUser.uid;
+    const unsub = subscribeToUserChats(uid, (raw) => {
+      const mapped: ChatConversation[] = raw.map((c) => {
+        const participants = (c.participants as string[]) ?? [];
+        const otherId = participants.find((p) => p !== uid) ?? "";
+        const names = (c.participantNames as Record<string, string>) ?? {};
+        const avatars = (c.participantAvatars as Record<string, string>) ?? {};
+        const unreadMap = (c.unread as Record<string, number>) ?? {};
+        return {
+          id: c.id as string,
+          userId: otherId,
+          username: names[otherId] ?? "Unknown",
+          avatar:
+            avatars[otherId] ?? `https://picsum.photos/seed/${otherId}/100/100`,
+          lastMessage: (c.lastMessage as string) ?? "",
+          lastTime: (c.lastTime as string) ?? "",
+          unread: unreadMap[uid] ?? 0,
+          isOnline: false,
+          isRequest: false,
+          messages: [],
+        };
+      });
+      setChats(mapped);
+    });
+    return unsub;
+  }, [currentFirebaseUser]);
   const [requestsOpen, setRequestsOpen] = useState(false);
 
   const requests = chats.filter((c) => c.isRequest);
   const dms = chats.filter((c) => !c.isRequest);
 
-  // Only show plan groups the user has joined
-  const joinedGroupChats = mockGroupChats.filter((gc) => {
-    const plan = plans.find((p) => `plan-${p.id}` === gc.id);
-    return plan?.isJoined === true;
-  });
+  // Only joined plan groups - stored in local state when user joins a plan
+  const joinedGroupChats: { id: string; name: string; lastMessage: string }[] =
+    [];
 
   const accept = (id: string) => {
     setChats((cs) =>

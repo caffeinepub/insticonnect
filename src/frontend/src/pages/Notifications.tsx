@@ -1,15 +1,39 @@
 import { ChevronLeft } from "lucide-react";
+import { useEffect, useState } from "react";
 import { useApp } from "../App";
-import { notifications as mockNotifications } from "../mockData";
+import { useAuth } from "../context/AuthContext";
+import { subscribeToNotifications } from "../utils/firebaseService";
+
+interface NotifItem {
+  id: string;
+  userId?: string;
+  username: string;
+  avatar: string;
+  action: string;
+  time: string;
+  thumbnail?: string;
+  read: boolean;
+}
 
 export default function Notifications() {
   const { theme, goBack } = useApp();
-  const today = mockNotifications.slice(0, 4);
-  const week = mockNotifications.slice(4);
+  const { currentFirebaseUser } = useAuth();
+  const [notifications, setNotifications] = useState<NotifItem[]>([]);
+
+  useEffect(() => {
+    if (!currentFirebaseUser?.uid) return;
+    const unsub = subscribeToNotifications(currentFirebaseUser.uid, (items) => {
+      setNotifications(items as unknown as NotifItem[]);
+    });
+    return unsub;
+  }, [currentFirebaseUser?.uid]);
+
+  const today = notifications.slice(0, 4);
+  const week = notifications.slice(4);
   const surface = theme === "dark" ? "bg-[#1A1D27]" : "bg-white";
   const text2 = theme === "dark" ? "text-gray-400" : "text-gray-500";
 
-  const NotifRow = ({ n }: { n: (typeof mockNotifications)[0] }) => (
+  const NotifRow = ({ n }: { n: NotifItem }) => (
     <div
       className={`flex items-center gap-3 px-4 py-3.5 transition-all ${
         !n.read ? (theme === "dark" ? "bg-purple-900/20" : "bg-purple-50") : ""

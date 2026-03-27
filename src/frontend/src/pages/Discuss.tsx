@@ -5,15 +5,17 @@ import {
   Plus,
   TrendingUp,
 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useApp } from "../App";
 import BottomSheet from "../components/BottomSheet";
-import {
-  discussions as mockDiscussions,
-  fundaes as mockFundaes,
-  mockUsers,
-} from "../mockData";
+import { useAuth } from "../context/AuthContext";
 import type { Discussion, Fundae } from "../mockData";
+import {
+  addDiscussion as fbAddDiscussion,
+  addFundae as fbAddFundae,
+  subscribeDiscussions,
+  subscribeToFundaes,
+} from "../utils/firebaseService";
 
 const FILTERS = ["Hot", "New", "Top"];
 
@@ -30,8 +32,7 @@ function FundaeCard({ f, theme }: { f: Fundae; theme: string }) {
   };
 
   const openUserProfile = () => {
-    const u = mockUsers.find((m) => m.username === f.username);
-    if (u) navigate("other-profile", { userId: u.id });
+    navigate("other-profile", { userId: f.username });
   };
 
   return (
@@ -105,13 +106,31 @@ function FundaeCard({ f, theme }: { f: Fundae; theme: string }) {
 
 export default function Discuss() {
   const { theme, navigate, addToast } = useApp();
+  const { userProfile } = useAuth();
   const [mainTab, setMainTab] = useState<"discussions" | "fundaes">(
     "discussions",
   );
   const [filter, setFilter] = useState("Hot");
   const [fundaeTab, setFundaeTab] = useState<"give" | "request">("give");
-  const [discussions, setDiscussions] = useState<Discussion[]>(mockDiscussions);
+  const [discussions, setDiscussions] = useState<Discussion[]>([]);
+  const [fundaes, setFundaes] = useState<Fundae[]>([]);
   const [newOpen, setNewOpen] = useState(false);
+  const [newTitle, setNewTitle] = useState("");
+  const [newBody, setNewBody] = useState("");
+  const [newFundaeType, _setNewFundaeType] = useState<"give" | "request">(
+    "give",
+  );
+
+  useEffect(() => {
+    const unsubD = subscribeDiscussions((items) => setDiscussions(items));
+    const unsubF = subscribeToFundaes((items) =>
+      setFundaes(items as unknown as Fundae[]),
+    );
+    return () => {
+      unsubD();
+      unsubF();
+    };
+  }, []);
 
   const vote = (id: string, dir: "up" | "down") => {
     setDiscussions((ds) =>
@@ -271,10 +290,9 @@ export default function Discuss() {
                         type="button"
                         onClick={(e) => {
                           e.stopPropagation();
-                          const u = mockUsers.find(
-                            (m) => m.username === d.username,
-                          );
-                          if (u) navigate("other-profile", { userId: u.id });
+                          navigate("other-profile", {
+                            userId: d.userId || d.username,
+                          });
                         }}
                         className="flex items-center gap-1 hover:opacity-80 transition-opacity cursor-pointer"
                       >
@@ -321,7 +339,7 @@ export default function Discuss() {
           </div>
 
           <div className="space-y-3 pb-4">
-            {mockFundaes
+            {fundaes
               .filter((f) => f.type === fundaeTab)
               .map((f) => (
                 <FundaeCard key={f.id} f={f} theme={theme} />
@@ -348,6 +366,8 @@ export default function Discuss() {
       >
         <div className="space-y-3">
           <input
+            value={newTitle}
+            onChange={(e) => setNewTitle(e.target.value)}
             placeholder="Title"
             className={`w-full px-4 py-3 rounded-2xl border text-sm outline-none ${
               theme === "dark"
@@ -357,6 +377,8 @@ export default function Discuss() {
             data-ocid="discuss.input"
           />
           <textarea
+            value={newBody}
+            onChange={(e) => setNewBody(e.target.value)}
             placeholder="What do you want to discuss?"
             rows={3}
             className={`w-full px-4 py-3 rounded-2xl border text-sm outline-none resize-none ${
@@ -368,9 +390,44 @@ export default function Discuss() {
           />
           <button
             type="button"
-            onClick={() => {
+            onClick={async () => {
+              if (!newTitle.trim()) return;
+              const username = userProfile?.username ?? "user";
+              const avatar = userProfile?.avatar ?? "";
+              const userId = userProfile?.id ?? "";
+              try {
+                if (mainTab === "fundaes") {
+                  await fbAddFundae({
+                    type: newFundaeType,
+                    username,
+                    avatar,
+                    title: newTitle.trim(),
+                    description: newBody.trim(),
+                    tags: [],
+                    time: "just now",
+                  });
+                } else {
+                  await fbAddDiscussion({
+                    userId,
+                    username,
+                    avatar,
+                    title: newTitle.trim(),
+                    body: newBody.trim(),
+                    tags: [],
+                    upvotes: 0,
+                    downvotes: 0,
+                    voted: null,
+                    comments: [],
+                    time: "just now",
+                  });
+                }
+                addToast("Posted!", "success");
+              } catch {
+                addToast("Failed to post", "error");
+              }
+              setNewTitle("");
+              setNewBody("");
               setNewOpen(false);
-              addToast("Posted!", "success");
             }}
             className="w-full py-3.5 rounded-2xl text-white font-semibold text-sm btn-gradient"
             data-ocid="discuss.submit_button"

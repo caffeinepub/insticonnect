@@ -1,18 +1,34 @@
 import { ChevronDown, ChevronLeft, ChevronUp, Send } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useApp } from "../App";
-import { discussions } from "../mockData";
-import type { Comment } from "../mockData";
+import { useAuth } from "../context/AuthContext";
+import type { Comment, Discussion } from "../mockData";
+import { subscribeDiscussions } from "../utils/firebaseService";
 
 export default function DiscussDetail() {
   const { theme, goBack, pageMeta, addToast } = useApp();
+  const { userProfile } = useAuth();
   const id = pageMeta.discussionId as string;
-  const disc = discussions.find((d) => d.id === id) || discussions[0];
-  const [voted, setVoted] = useState<"up" | "down" | null>(disc.voted);
-  const [upvotes, setUpvotes] = useState(disc.upvotes);
-  const [downvotes, setDownvotes] = useState(disc.downvotes);
+  const [disc, setDisc] = useState<Discussion | null>(null);
+  const [voted, setVoted] = useState<"up" | "down" | null>(null);
+  const [upvotes, setUpvotes] = useState(0);
+  const [downvotes, setDownvotes] = useState(0);
   const [reply, setReply] = useState("");
-  const [comments, setComments] = useState<Comment[]>(disc.comments);
+  const [comments, setComments] = useState<Comment[]>([]);
+
+  useEffect(() => {
+    const unsub = subscribeDiscussions((items) => {
+      const found = items.find((d) => d.id === id);
+      if (found) {
+        setDisc(found);
+        setUpvotes(found.upvotes);
+        setDownvotes(found.downvotes);
+        setVoted(found.voted);
+        setComments(found.comments ?? []);
+      }
+    });
+    return unsub;
+  }, [id]);
 
   const vote = (dir: "up" | "down") => {
     if (voted === dir) {
@@ -32,8 +48,8 @@ export default function DiscussDetail() {
     if (!reply.trim()) return;
     const newComment: Comment = {
       id: Math.random().toString(36).slice(2),
-      username: "aryan_s",
-      avatar: "https://picsum.photos/seed/user1/100/100",
+      username: userProfile?.username ?? "user",
+      avatar: userProfile?.avatar ?? "",
       text: reply,
       time: "just now",
       likes: 0,
@@ -46,6 +62,14 @@ export default function DiscussDetail() {
   const surface = theme === "dark" ? "bg-[#1A1D27]" : "bg-white";
   const bg = theme === "dark" ? "bg-[#0D0F14]" : "bg-[#F6F8FB]";
   const text2 = theme === "dark" ? "text-gray-400" : "text-gray-500";
+
+  if (!disc) {
+    return (
+      <div className={`min-h-screen ${bg} flex items-center justify-center`}>
+        <p className={text2}>Loading discussion...</p>
+      </div>
+    );
+  }
 
   return (
     <div className={`min-h-screen ${bg} pb-32`}>
@@ -140,6 +164,11 @@ export default function DiscussDetail() {
 
         {/* Comments */}
         <h3 className="font-bold text-sm mb-3">Comments</h3>
+        {comments.length === 0 && (
+          <p className={`text-sm ${text2} text-center py-6`}>
+            No comments yet. Be the first!
+          </p>
+        )}
         <div className="space-y-3">
           {comments.map((c) => (
             <div key={c.id} className={`${surface} rounded-2xl p-3`}>

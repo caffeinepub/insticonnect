@@ -12,18 +12,23 @@ import AvatarWithPreview from "../components/AvatarWithPreview";
 import PostCarousel from "../components/PostCarousel";
 import StoryCreator from "../components/StoryCreator";
 import StoryViewer from "../components/StoryViewer";
-import {
-  currentUser,
-  posts as mockPosts,
-  stories as mockStories,
-} from "../mockData";
+
+import { useAuth } from "../context/AuthContext";
 import type { Post, Story } from "../mockData";
-import { subscribeToPosts, subscribeToStories } from "../utils/firebaseService";
+import {
+  addComment as fbAddComment,
+  deletePost as fbDeletePost,
+  toggleLike as fbToggleLike,
+  subscribeToPosts,
+  subscribeToStories,
+} from "../utils/firebaseService";
 
 export default function Home() {
-  const { theme, addToast, setOnNewPost, navigate } = useApp();
-  const [stories, setStories] = useState<Story[]>(mockStories);
-  const [posts, setPosts] = useState<Post[]>(mockPosts);
+  const { theme, addToast, setOnNewPost, navigate, user: appUser } = useApp();
+  const { userProfile } = useAuth();
+  const realUser = userProfile ?? appUser;
+  const [stories, setStories] = useState<Story[]>([]);
+  const [posts, setPosts] = useState<Post[]>([]);
   // Story viewer: show only the tapped user's stories
   const [viewingUserStories, setViewingUserStories] = useState<Story[] | null>(
     null,
@@ -50,10 +55,10 @@ export default function Home() {
   // Subscribe to Firestore (fallback to mock if not configured)
   useEffect(() => {
     const unsubPosts = subscribeToPosts((firestorePosts) => {
-      if (firestorePosts.length > 0) setPosts(firestorePosts);
+      setPosts(firestorePosts);
     });
     const unsubStories = subscribeToStories((firestoreStories) => {
-      if (firestoreStories.length > 0) setStories(firestoreStories);
+      setStories(firestoreStories);
     });
     return () => {
       unsubPosts();
@@ -81,6 +86,10 @@ export default function Home() {
   };
 
   const toggleLike = (postId: string) => {
+    const post = posts.find((p) => p.id === postId);
+    if (!post) return;
+    const uid = realUser?.id ?? "";
+    const isLiking = !post.liked;
     setPosts((ps) =>
       ps.map((p) =>
         p.id === postId
@@ -92,6 +101,7 @@ export default function Home() {
           : p,
       ),
     );
+    if (uid) void fbToggleLike(postId, uid, isLiking);
     setLikedAnim((s) => {
       const n = new Set(s);
       n.add(postId);
@@ -127,6 +137,9 @@ export default function Home() {
   const submitComment = (postId: string) => {
     const text = commentInputs[postId]?.trim();
     if (!text) return;
+    const username = realUser?.username ?? "user";
+    const avatar = realUser?.avatar ?? "";
+    const userId = realUser?.id ?? "";
     setPosts((ps) =>
       ps.map((p) =>
         p.id === postId
@@ -136,8 +149,8 @@ export default function Home() {
                 ...p.comments,
                 {
                   id: Math.random().toString(36).slice(2),
-                  username: currentUser.username,
-                  avatar: currentUser.avatar,
+                  username,
+                  avatar,
                   text,
                   time: "just now",
                   likes: 0,
@@ -148,10 +161,14 @@ export default function Home() {
       ),
     );
     setCommentInputs((ci) => ({ ...ci, [postId]: "" }));
+    if (userId) {
+      void fbAddComment(postId, { username, avatar, text, userId });
+    }
   };
 
   const deletePost = (postId: string) => {
     setPosts((ps) => ps.filter((p) => p.id !== postId));
+    void fbDeletePost(postId);
     addToast("Post deleted", "info");
   };
 
@@ -159,7 +176,7 @@ export default function Home() {
     // Ensure userId is set correctly so filtering works
     const publishedStory: Story = {
       ...story,
-      userId: story.userId || currentUser.id,
+      userId: (story.userId || realUser?.id) ?? "",
     };
     setStories((s) => [publishedStory, ...s]);
     addToast("Story added!", "success");
@@ -209,8 +226,14 @@ export default function Home() {
   const border = theme === "dark" ? "border-white/5" : "border-gray-100";
   const text2 = theme === "dark" ? "text-gray-400" : "text-gray-500";
 
+  // Filter out expired stories (24hr)
+  const now = Date.now();
+  const activeStories = stories.filter(
+    (s) => !s.expiresAt || s.expiresAt > now,
+  );
+
   // Deduplicate story bubbles: one per userId
-  const storyUsers = stories.reduce<Story[]>((acc, s) => {
+  const storyUsers = activeStories.reduce<Story[]>((acc, s) => {
     if (!acc.some((a) => a.userId === s.userId)) acc.push(s);
     return acc;
   }, []);
@@ -307,7 +330,7 @@ export default function Home() {
                 username={post.username}
                 hasStory={
                   !post.isAnonymous &&
-                  stories.some((s) => s.userId === post.userId)
+                  activeStories.some((s) => s.userId === post.userId)
                 }
                 onTapStory={() => openUserStory(post.userId)}
                 onTapProfile={() =>
@@ -346,7 +369,7 @@ export default function Home() {
                 </div>
                 <p className={`text-xs ${text2}`}>{post.time} ago</p>
               </div>
-              {post.userId === currentUser.id ? (
+              {post.userId === (realUser?.id ?? "") ? (
                 <button
                   type="button"
                   onClick={() => deletePost(post.id)}
@@ -492,7 +515,7 @@ export default function Home() {
                   {/* Comment input */}
                   <div className="flex items-center gap-2 pt-1">
                     <img
-                      src={currentUser.avatar}
+                      src={realUser?.avatar ?? ""}
                       alt="me"
                       className="w-7 h-7 rounded-full object-cover flex-shrink-0"
                     />
@@ -547,7 +570,7 @@ export default function Home() {
           onClose={() => setViewingUserStories(null)}
           onProfileTap={() => {
             const firstStory = viewingUserStories[0];
-            if (firstStory && firstStory.userId !== currentUser.id) {
+            if ((firstStory && firstStory.userId !== realUser?.id) ?? "") {
               navigate("other-profile", { userId: firstStory.userId });
               setViewingUserStories(null);
             }

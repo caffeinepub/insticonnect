@@ -1,8 +1,13 @@
-import { ChevronLeft, Image, Send, Users } from "lucide-react";
+import { ChevronLeft, Image, Send, Trash2, Users } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useApp } from "../App";
-import { chats, groupChats } from "../mockData";
+import { useAuth } from "../context/AuthContext";
 import type { ChatMessage } from "../mockData";
+import {
+  deleteMessage as fbDeleteMessage,
+  sendMessage as fbSendMessage,
+  subscribeToMessages,
+} from "../utils/firebaseService";
 
 interface ExtendedMessage extends ChatMessage {
   imageUrl?: string;
@@ -15,63 +20,59 @@ export default function ChatScreen() {
   const chatName = pageMeta.chatName as string | undefined;
   const fromUserId = pageMeta.fromUserId as string | undefined;
 
-  const groupConv = chatId?.startsWith("plan-")
-    ? groupChats.find((g) => g.id === chatId)
-    : null;
-  const regularConv = chats.find((c) => c.id === chatId) || chats[0];
+  const isGroupChat = isGroup || chatId?.startsWith("plan-");
 
-  const displayName =
-    chatName || (groupConv ? groupConv.name : regularConv.username);
-  const displayAvatar = groupConv ? null : regularConv.avatar;
-  const isOnline = groupConv ? false : regularConv.isOnline;
+  const displayName = chatName ?? "Chat";
+  const displayAvatar: string | null = null;
+  const isOnline = false;
 
-  const [messages, setMessages] = useState<ExtendedMessage[]>(
-    groupConv ? groupConv.messages : regularConv.messages,
-  );
+  const [messages, setMessages] = useState<ExtendedMessage[]>([]);
   const [input, setInput] = useState("");
   const bottomRef = useRef<HTMLDivElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
+  const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const { userProfile } = useAuth();
+
+  useEffect(() => {
+    if (!chatId) return;
+    const unsub = subscribeToMessages(chatId, (msgs) => {
+      const converted: ExtendedMessage[] = msgs.map((m) => ({
+        id: String(m.id),
+        senderId: String(m.senderId ?? ""),
+        text: String(m.text ?? ""),
+        imageUrl: m.imageUrl ? String(m.imageUrl) : undefined,
+        time:
+          m.createdAt && typeof (m.createdAt as any).toDate === "function"
+            ? (m.createdAt as any)
+                .toDate()
+                .toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+            : String(m.time ?? ""),
+      }));
+      setMessages(converted);
+    });
+    return unsub;
+  }, [chatId]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }); // eslint-disable-line
 
-  const send = (imageUrl?: string) => {
+  const send = async (imageUrl?: string) => {
     if (!input.trim() && !imageUrl) return;
-    const msg: ExtendedMessage = {
-      id: Math.random().toString(36).slice(2),
-      senderId: "1",
-      text: imageUrl ? "" : input,
-      imageUrl,
+    const text = imageUrl ? "" : input;
+    const senderId = userProfile?.id ?? "unknown";
+    setInput("");
+    await fbSendMessage(chatId, {
+      senderId,
+      text,
+      imageUrl: imageUrl ?? null,
       time: new Date().toLocaleTimeString([], {
         hour: "2-digit",
         minute: "2-digit",
       }),
-    };
-    setMessages((m) => [...m, msg]);
-    setInput("");
-
-    if (!isGroup && !groupConv && !imageUrl) {
-      setTimeout(() => {
-        const replies = [
-          "Got it!",
-          "Sure thing 👌",
-          "Sounds good!",
-          "Let me check...",
-          "😄",
-        ];
-        const auto: ExtendedMessage = {
-          id: Math.random().toString(36).slice(2),
-          senderId: regularConv.userId,
-          text: replies[Math.floor(Math.random() * replies.length)],
-          time: new Date().toLocaleTimeString([], {
-            hour: "2-digit",
-            minute: "2-digit",
-          }),
-        };
-        setMessages((m) => [...m, auto]);
-      }, 1200);
-    }
+    });
+    console.log("[Chat] Message sent to", chatId);
   };
 
   const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -127,14 +128,14 @@ export default function ChatScreen() {
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-1.5">
             <p className="font-semibold text-sm truncate">{displayName}</p>
-            {(isGroup || groupConv) && (
+            {isGroupChat && (
               <span className="flex items-center gap-0.5 text-xs bg-purple-100 dark:bg-purple-900/40 text-purple-600 px-1.5 py-0.5 rounded-full">
                 <Users size={10} />
                 Group
               </span>
             )}
           </div>
-          {!isGroup && !groupConv && (
+          {!isGroupChat && (
             <p
               className={`text-xs ${
                 isOnline
@@ -189,24 +190,25 @@ export default function ChatScreen() {
             data-ocid="chat.empty_state"
           >
             <div className="w-16 h-16 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-2xl">
-              {isGroup || groupConv ? "💬" : "👋"}
+              {isGroupChat ? "💬" : "👋"}
             </div>
             <p
               className={`text-sm ${isDark ? "text-gray-400" : "text-gray-500"}`}
             >
-              {isGroup || groupConv
+              {isGroupChat
                 ? "Group chat started! Say hello 👋"
                 : "Start a conversation"}
             </p>
           </div>
         )}
         {messages.map((msg) => {
-          const isMine = msg.senderId === "1";
+          const isMine = msg.senderId === userProfile?.id;
           return (
             <div
               key={msg.id}
               className={`flex ${isMine ? "justify-end" : "justify-start"}`}
             >
+              {/* biome-ignore lint/a11y/useKeyWithClickEvents: long press message */}
               <div
                 className={`max-w-[75%] ${
                   msg.imageUrl ? "" : "px-4 py-2.5"
@@ -217,6 +219,40 @@ export default function ChatScreen() {
                       ? "bg-[#1A1D27] text-gray-100 rounded-bl-sm"
                       : "bg-white text-gray-800 rounded-bl-sm shadow-sm"
                 }`}
+                onMouseDown={() => {
+                  if (!isMine) return;
+                  longPressTimer.current = setTimeout(async () => {
+                    if (window.confirm("Delete this message?")) {
+                      await fbDeleteMessage(chatId, msg.id);
+                    }
+                  }, 500);
+                }}
+                onMouseUp={() => {
+                  if (longPressTimer.current) {
+                    clearTimeout(longPressTimer.current);
+                    longPressTimer.current = null;
+                  }
+                }}
+                onMouseLeave={() => {
+                  if (longPressTimer.current) {
+                    clearTimeout(longPressTimer.current);
+                    longPressTimer.current = null;
+                  }
+                }}
+                onTouchStart={() => {
+                  if (!isMine) return;
+                  longPressTimer.current = setTimeout(async () => {
+                    if (window.confirm("Delete this message?")) {
+                      await fbDeleteMessage(chatId, msg.id);
+                    }
+                  }, 500);
+                }}
+                onTouchEnd={() => {
+                  if (longPressTimer.current) {
+                    clearTimeout(longPressTimer.current);
+                    longPressTimer.current = null;
+                  }
+                }}
               >
                 {msg.imageUrl ? (
                   <img

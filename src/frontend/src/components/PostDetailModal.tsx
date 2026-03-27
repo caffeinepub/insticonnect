@@ -11,8 +11,8 @@ import {
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useRef, useState } from "react";
 import { useApp } from "../App";
+import { useAuth } from "../context/AuthContext";
 import type { Comment, Post } from "../mockData";
-import { currentUser } from "../mockData";
 import PostCarousel from "./PostCarousel";
 
 interface PostDetailModalProps {
@@ -29,12 +29,14 @@ export default function PostDetailModal({
   onUpdate,
 }: PostDetailModalProps) {
   const { theme, addToast } = useApp();
+  const { currentFirebaseUser, userProfile } = useAuth();
   const [post, setPost] = useState<Post>(initialPost);
   const [commentText, setCommentText] = useState("");
   const [menuOpen, setMenuOpen] = useState(false);
   const commentInputRef = useRef<HTMLInputElement>(null);
 
-  const isOwn = post.userId === currentUser.id;
+  const isOwn =
+    !!currentFirebaseUser && post.userId === currentFirebaseUser.uid;
   const dark = theme === "dark";
 
   // Sync if parent updates
@@ -64,8 +66,8 @@ export default function PostDetailModal({
     if (!text) return;
     const newComment: Comment = {
       id: Math.random().toString(36).slice(2),
-      username: currentUser.username,
-      avatar: currentUser.avatar,
+      username: userProfile?.username ?? "You",
+      avatar: userProfile?.avatar ?? "https://picsum.photos/seed/me/100/100",
       text,
       time: "now",
       likes: 0,
@@ -339,7 +341,9 @@ export default function PostDetailModal({
             className={`flex items-center gap-3 px-4 py-3 border-t ${borderColor} flex-shrink-0`}
           >
             <img
-              src={currentUser.avatar}
+              src={
+                userProfile?.avatar ?? "https://picsum.photos/seed/me/100/100"
+              }
               alt="me"
               className="w-8 h-8 rounded-full object-cover flex-shrink-0"
             />

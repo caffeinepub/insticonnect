@@ -1,7 +1,7 @@
 import { Bell, ChevronLeft, Moon, Sun } from "lucide-react";
 import { useState } from "react";
 import { type AccentTheme, useApp } from "../App";
-import { currentUser } from "../mockData";
+import { useAuth } from "../context/AuthContext";
 import { requestNotificationPermission } from "../utils/firebase";
 
 function Toggle({
@@ -55,7 +55,17 @@ export default function Settings() {
     setShowSavedPosts,
     showLikedPosts,
     setShowLikedPosts,
+    user,
+    setUser,
+    navigate,
   } = useApp();
+  const { signOut } = useAuth();
+
+  const handleSignOut = async () => {
+    await signOut();
+    setUser(null);
+    navigate("login");
+  };
   const [privateAcc, setPrivateAcc] = useState(false);
   const [anonPosting, setAnonPosting] = useState(false);
   const [msgReq, setMsgReq] = useState(true);
@@ -115,9 +125,9 @@ export default function Settings() {
       </div>
 
       <Section title="Account">
-        <Row label="Name" sub={currentUser.name} />
-        <Row label="Username" sub={`@${currentUser.username}`} />
-        <Row label="Email" sub={currentUser.email} />
+        <Row label="Name" sub={user?.name ?? ""} />
+        <Row label="Username" sub={user?.username ? `@${user.username}` : ""} />
+        <Row label="Email" sub={user?.email ?? ""} />
       </Section>
 
       <Section title="Privacy">
@@ -269,7 +279,14 @@ export default function Settings() {
         <Row
           label="Sign Out"
           right={
-            <span className="text-red-500 text-sm font-medium">Sign Out</span>
+            <button
+              type="button"
+              onClick={() => void handleSignOut()}
+              className="text-red-500 text-sm font-medium"
+              data-ocid="settings.delete_button"
+            >
+              Sign Out
+            </button>
           }
         />
       </Section>

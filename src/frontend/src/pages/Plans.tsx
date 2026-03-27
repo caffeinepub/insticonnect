@@ -1,9 +1,16 @@
 import { Clock, MapPin, Plus, Users } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useApp } from "../App";
 import BottomSheet from "../components/BottomSheet";
-import { currentUser, plans as mockPlans, mockUsers } from "../mockData";
+import { useAuth } from "../context/AuthContext";
 import type { Plan } from "../mockData";
+import {
+  addPlan as fbAddPlan,
+  deletePlan as fbDeletePlan,
+  updatePlan as fbUpdatePlan,
+  getUserById,
+  subscribePlans,
+} from "../utils/firebaseService";
 
 const CATEGORIES = [
   "All",
@@ -27,7 +34,14 @@ const CATEGORY_COLORS: Record<string, string> = {
 
 export default function Plans() {
   const { theme, addToast, navigate } = useApp();
-  const [plans, setPlans] = useState<Plan[]>(mockPlans);
+  const { userProfile } = useAuth();
+  const [plans, setPlans] = useState<Plan[]>([]);
+
+  // Subscribe to Firestore plans
+  useEffect(() => {
+    const unsub = subscribePlans((firestorePlans) => setPlans(firestorePlans));
+    return unsub;
+  }, []);
   const [selected, setSelected] = useState("All");
   const [createOpen, setCreateOpen] = useState(false);
 
@@ -41,18 +55,15 @@ export default function Plans() {
   const filtered =
     selected === "All" ? plans : plans.filter((p) => p.category === selected);
 
-  const joinPlan = (id: string) => {
+  const joinPlan = async (id: string) => {
     const plan = plans.find((p) => p.id === id);
     if (!plan) return;
 
     const newJoined = plan.isJoined ? plan.joined - 1 : plan.joined + 1;
     const willBeFull = !plan.isJoined && newJoined >= plan.slots;
+    const newIsJoined = !plan.isJoined;
 
-    setPlans((ps) =>
-      ps.map((p) =>
-        p.id === id ? { ...p, isJoined: !p.isJoined, joined: newJoined } : p,
-      ),
-    );
+    void fbUpdatePlan(id, { isJoined: newIsJoined, joined: newJoined });
 
     if (!plan.isJoined) {
       addToast(`Joined ${plan.title} group chat! 🎉`, "success");
@@ -64,7 +75,7 @@ export default function Plans() {
 
       if (willBeFull) {
         setTimeout(() => {
-          setPlans((ps) => ps.filter((p) => p.id !== id));
+          void fbDeletePlan(id);
           addToast(
             "Plan is full — it's been removed from the board! 🎉",
             "info",
@@ -76,39 +87,43 @@ export default function Plans() {
     }
   };
 
-  const createPlan = () => {
+  const createPlan = async () => {
     if (!newTitle.trim()) return;
     const slots = Math.min(50, Math.max(2, Number(newSlots) || 10));
-    const newPlan: Plan = {
-      id: Math.random().toString(36).slice(2),
+    const organizer = userProfile?.username ?? "user";
+    const newPlan: Omit<Plan, "id"> = {
       title: newTitle.trim(),
       description: newDesc.trim() || "No description provided.",
       category: newCategory,
       tags: [],
       slots,
       joined: 1,
-      isJoined: true,
-      organizer: currentUser.username,
+      isJoined: false,
+      organizer,
       time: "Today",
       location: newLocation.trim() || "TBD",
     };
-    setPlans((ps) => [newPlan, ...ps]);
+    try {
+      await fbAddPlan(newPlan);
+      addToast("Plan created! 🎉", "success");
+    } catch (_e) {
+      addToast("Failed to create plan", "error");
+    }
     setNewTitle("");
     setNewDesc("");
     setNewLocation("");
     setNewSlots("");
     setNewCategory("Social");
     setCreateOpen(false);
-    addToast("Plan created! 🎉", "success");
   };
 
-  const openOrganizerProfile = (organizer: string) => {
-    if (organizer === "aryan_s") {
+  const openOrganizerProfile = async (organizer: string) => {
+    if (organizer === userProfile?.username) {
       navigate("profile");
-    } else {
-      const user = mockUsers.find((u) => u.username === organizer);
-      if (user) navigate("other-profile", { userId: user.id });
+      return;
     }
+    // Try to find user by username in Firestore (simplified: use username as userId search)
+    navigate("other-profile", { userId: organizer });
   };
 
   const surface = theme === "dark" ? "bg-[#1A1D27]" : "bg-white";
