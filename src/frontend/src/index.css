@@ -1,0 +1,428 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --radius: 0.625rem;
+    --background: 1 0 0;
+    --foreground: 0.145 0 0;
+    --card: 1 0 0;
+    --card-foreground: 0.145 0 0;
+    --popover: 1 0 0;
+    --popover-foreground: 0.145 0 0;
+    --primary: 0.205 0 0;
+    --primary-foreground: 0.985 0 0;
+    --secondary: 0.97 0 0;
+    --secondary-foreground: 0.205 0 0;
+    --muted: 0.97 0 0;
+    --muted-foreground: 0.556 0 0;
+    --accent: 0.97 0 0;
+    --accent-foreground: 0.205 0 0;
+    --destructive: 0.577 0.245 27.325;
+    --destructive-foreground: 0.985 0 0;
+    --border: 0.922 0 0;
+    --input: 0.922 0 0;
+    --ring: 0.708 0 0;
+    --chart-1: 0.646 0.222 41.116;
+    --chart-2: 0.6 0.118 184.704;
+    --chart-3: 0.398 0.07 227.392;
+    --chart-4: 0.828 0.189 84.429;
+    --chart-5: 0.769 0.188 70.08;
+    --sidebar: 0.985 0 0;
+    --sidebar-foreground: 0.145 0 0;
+    --sidebar-primary: 0.205 0 0;
+    --sidebar-primary-foreground: 0.985 0 0;
+    --sidebar-accent: 0.97 0 0;
+    --sidebar-accent-foreground: 0.205 0 0;
+    --sidebar-border: 0.922 0 0;
+    --sidebar-ring: 0.708 0 0;
+
+    /* App custom */
+    --app-accent: #7c3aed;
+    --app-accent2: #d946ef;
+    --app-accent3: #3b82f6;
+    --app-bg: #f6f8fb;
+    --app-surface: #ffffff;
+    --app-text: #111827;
+    --app-text2: #6b7280;
+    --app-border: #e5e7eb;
+    --app-gradient: linear-gradient(135deg, #7c3aed, #d946ef, #3b82f6);
+  }
+
+  .dark {
+    --background: 0.145 0 0;
+    --foreground: 0.985 0 0;
+    --card: 0.205 0 0;
+    --card-foreground: 0.985 0 0;
+    --popover: 0.269 0 0;
+    --popover-foreground: 0.985 0 0;
+    --primary: 0.922 0 0;
+    --primary-foreground: 0.205 0 0;
+    --secondary: 0.269 0 0;
+    --secondary-foreground: 0.985 0 0;
+    --muted: 0.269 0 0;
+    --muted-foreground: 0.708 0 0;
+    --accent: 0.371 0 0;
+    --accent-foreground: 0.985 0 0;
+    --destructive: 0.704 0.191 22.216;
+    --destructive-foreground: 0.205 0 0;
+    --border: 1 0 0 / 10%;
+    --input: 1 0 0 / 15%;
+    --ring: 0.556 0 0;
+    --chart-1: 0.488 0.243 264.376;
+    --chart-2: 0.696 0.17 162.48;
+    --chart-3: 0.769 0.188 70.08;
+    --chart-4: 0.627 0.265 303.9;
+    --chart-5: 0.645 0.246 16.439;
+    --sidebar: 0.205 0 0;
+    --sidebar-foreground: 0.985 0 0;
+    --sidebar-primary: 0.488 0.243 264.376;
+    --sidebar-primary-foreground: 0.985 0 0;
+    --sidebar-accent: 0.269 0 0;
+    --sidebar-accent-foreground: 0.985 0 0;
+    --sidebar-border: 1 0 0 / 10%;
+    --sidebar-ring: 0.439 0 0;
+
+    /* App custom dark */
+    --app-bg: #0d0f14;
+    --app-surface: #1a1d27;
+    --app-text: #f9fafb;
+    --app-text2: #9ca3af;
+    --app-border: #2d3148;
+  }
+
+  * {
+    @apply border-border;
+    scrollbar-width: none;
+  }
+  *::-webkit-scrollbar {
+    display: none;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-family: "Outfit", sans-serif;
+    background-color: var(--app-bg);
+    color: var(--app-text);
+    overflow-x: hidden;
+  }
+}
+
+/* Animations */
+@keyframes slideInRight {
+  from {
+    transform: translateX(60px);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+@keyframes slideInLeft {
+  from {
+    transform: translateX(-60px);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes slideUp {
+  from {
+    transform: translateY(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+@keyframes slideDown {
+  from {
+    transform: translateY(-20px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+@keyframes storyProgress {
+  from {
+    width: 0%;
+  }
+  to {
+    width: 100%;
+  }
+}
+@keyframes likePulse {
+  0% {
+    transform: scale(1);
+  }
+  40% {
+    transform: scale(1.5);
+  }
+  70% {
+    transform: scale(0.9);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+@keyframes toastIn {
+  from {
+    transform: translateX(120%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+@keyframes toastOut {
+  from {
+    transform: translateX(0);
+    opacity: 1;
+  }
+  to {
+    transform: translateX(120%);
+    opacity: 0;
+  }
+}
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes pulseGlow {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(124, 58, 237, 0.4);
+  }
+  50% {
+    box-shadow: 0 0 0 8px rgba(124, 58, 237, 0);
+  }
+}
+@keyframes gradientShift {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+.page-enter {
+  animation: slideInRight 0.32s cubic-bezier(0.25, 0.46, 0.45, 0.94) both;
+}
+.page-enter-back {
+  animation: slideInLeft 0.32s cubic-bezier(0.25, 0.46, 0.45, 0.94) both;
+}
+.page-fade {
+  animation: fadeInUp 0.28s ease-out both;
+}
+.sheet-enter {
+  animation: slideUp 0.36s cubic-bezier(0.34, 1.2, 0.64, 1) both;
+}
+.toast-enter {
+  animation: toastIn 0.35s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+.toast-exit {
+  animation: toastOut 0.3s ease-in both;
+}
+.like-pulse {
+  animation: likePulse 0.45s ease-out both;
+}
+.story-progress {
+  animation: storyProgress linear both;
+}
+
+/* Glassmorphism */
+.glass {
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+}
+.glass-dark {
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  background: rgba(10, 10, 20, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+.dark .glass {
+  background: rgba(15, 17, 30, 0.65);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+/* Gradient text */
+.gradient-text {
+  background: linear-gradient(135deg, #7c3aed, #d946ef, #3b82f6);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  background-size: 200% 200%;
+  animation: gradientShift 4s ease infinite;
+}
+
+/* Story ring */
+.story-ring {
+  background: linear-gradient(45deg, #d946ef, #7c3aed, #3b82f6);
+  padding: 2.5px;
+  border-radius: 50%;
+}
+.story-ring-inner {
+  background: var(--app-bg);
+  border-radius: 50%;
+  padding: 2px;
+}
+
+/* Animated gradient button */
+.btn-gradient {
+  background: linear-gradient(135deg, #7c3aed, #d946ef, #3b82f6);
+  background-size: 200% 200%;
+  animation: gradientShift 3s ease infinite;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+.btn-gradient:hover {
+  transform: scale(1.03);
+  box-shadow: 0 8px 32px rgba(124, 58, 237, 0.4);
+}
+.btn-gradient:active {
+  transform: scale(0.97);
+}
+
+/* Card hover */
+.card-hover {
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+.card-hover:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.12);
+}
+
+/* Toggle switch */
+.toggle-track {
+  transition: background 0.25s ease;
+}
+.toggle-thumb {
+  transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* Accent themes */
+.accent-blue {
+  --app-accent: #3b82f6;
+  --app-accent2: #60a5fa;
+}
+.accent-pink {
+  --app-accent: #ec4899;
+  --app-accent2: #f472b6;
+}
+.accent-pride {
+  --app-accent: #7c3aed;
+  --app-accent2: #d946ef;
+}
+
+/* Morphed blob background */
+.blob-bg::before {
+  content: "";
+  position: fixed;
+  top: -20%;
+  left: -20%;
+  width: 70%;
+  height: 70%;
+  background: radial-gradient(
+    ellipse,
+    rgba(124, 58, 237, 0.08) 0%,
+    transparent 70%
+  );
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 0;
+}
+.blob-bg::after {
+  content: "";
+  position: fixed;
+  bottom: -10%;
+  right: -10%;
+  width: 60%;
+  height: 60%;
+  background: radial-gradient(
+    ellipse,
+    rgba(217, 70, 239, 0.07) 0%,
+    transparent 70%
+  );
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* Post slide-in animation */
+@keyframes postSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.post-slide-in {
+  animation: postSlideIn 0.4s ease forwards;
+}
+
+/* Spin animation for pull-to-refresh */
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* CreatePost full-screen entrance */
+@keyframes createPostEnter {
+  from {
+    transform: translateY(100%);
+    opacity: 0.8;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+.create-post-enter {
+  animation: createPostEnter 0.38s cubic-bezier(0.34, 1.1, 0.64, 1) both;
+}
+
+/* CreatePost step 2 slide in from right */
+@keyframes step2Enter {
+  from {
+    transform: translateX(40px);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+.create-post-step2 {
+  animation: step2Enter 0.28s cubic-bezier(0.25, 0.46, 0.45, 0.94) both;
+}
