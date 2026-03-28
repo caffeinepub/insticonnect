@@ -7,9 +7,12 @@ import {
   deleteDoc,
   doc,
   getDoc,
+  getDocs,
+  limit,
   onSnapshot,
   orderBy,
   query,
+  runTransaction,
   serverTimestamp,
   setDoc,
   updateDoc,
@@ -56,14 +59,22 @@ export async function toggleLike(
   isLiking: boolean,
 ): Promise<void> {
   try {
-    await updateDoc(doc(db, "posts", postId), {
-      likedBy: isLiking ? arrayUnion(uid) : arrayRemove(uid),
-      likes: isLiking
-        ? (await getDoc(doc(db, "posts", postId))).data()?.likes + 1 || 1
-        : Math.max(
-            0,
-            ((await getDoc(doc(db, "posts", postId))).data()?.likes ?? 1) - 1,
-          ),
+    const postRef = doc(db, "posts", postId);
+    await runTransaction(db, async (transaction) => {
+      const postSnap = await transaction.get(postRef);
+      if (!postSnap.exists()) return;
+      const likedBy: string[] = postSnap.data().likedBy ?? [];
+      const alreadyLiked = likedBy.includes(uid);
+      // Enforce one-like-per-user: no-op if state already matches
+      if (isLiking && alreadyLiked) return;
+      if (!isLiking && !alreadyLiked) return;
+      const newLikedBy = isLiking
+        ? [...likedBy, uid]
+        : likedBy.filter((id) => id !== uid);
+      transaction.update(postRef, {
+        likedBy: newLikedBy,
+        likes: newLikedBy.length,
+      });
     });
     console.log("[Firestore] Like toggled:", postId, isLiking);
   } catch (e) {
@@ -89,13 +100,24 @@ export async function savePost(postId: string, saved: boolean): Promise<void> {
 
 export function subscribeToPosts(
   callback: (posts: Post[]) => void,
+  uid?: string,
 ): () => void {
   try {
     const q = query(collection(db, "posts"), orderBy("createdAt", "desc"));
     return onSnapshot(
       q,
       (snap) => {
-        const posts = snap.docs.map((d) => ({ ...d.data(), id: d.id }) as Post);
+        const posts = snap.docs.map((d) => {
+          const data = d.data();
+          const likedBy: string[] = data.likedBy ?? [];
+          return {
+            ...data,
+            id: d.id,
+            liked: uid ? likedBy.includes(uid) : false,
+            likes: likedBy.length,
+            comments: data.comments ?? [],
+          } as Post;
+        });
         console.log("[Firestore] Posts snapshot:", posts.length);
         callback(posts);
       },
@@ -110,6 +132,7 @@ export function subscribeToPosts(
 export function subscribeToUserPosts(
   userId: string,
   callback: (posts: Post[]) => void,
+  uid?: string,
 ): () => void {
   try {
     const q = query(
@@ -120,7 +143,17 @@ export function subscribeToUserPosts(
     return onSnapshot(
       q,
       (snap) => {
-        const posts = snap.docs.map((d) => ({ ...d.data(), id: d.id }) as Post);
+        const posts = snap.docs.map((d) => {
+          const data = d.data();
+          const likedBy: string[] = data.likedBy ?? [];
+          return {
+            ...data,
+            id: d.id,
+            liked: uid ? likedBy.includes(uid) : false,
+            likes: likedBy.length,
+            comments: data.comments ?? [],
+          } as Post;
+        });
         console.log("[Firestore] User posts snapshot:", posts.length);
         callback(posts);
       },
@@ -128,6 +161,61 @@ export function subscribeToUserPosts(
     );
   } catch (e) {
     console.error("[Firestore] subscribeToUserPosts setup failed", e);
+    return () => {};
+  }
+}
+
+export function subscribeToTaggedPosts(
+  username: string,
+  callback: (posts: Post[]) => void,
+  uid?: string,
+): () => void {
+  try {
+    const q = query(
+      collection(db, "posts"),
+      where("taggedUsers", "array-contains", username),
+      orderBy("createdAt", "desc"),
+    );
+    return onSnapshot(
+      q,
+      (snap) => {
+        const posts = snap.docs.map((d) => {
+          const data = d.data();
+          const likedBy: string[] = data.likedBy ?? [];
+          return {
+            ...data,
+            id: d.id,
+            liked: uid ? likedBy.includes(uid) : false,
+            likes: likedBy.length,
+            comments: data.comments ?? [],
+          } as Post;
+        });
+        callback(posts);
+      },
+      (err) => console.error("[Firestore] subscribeToTaggedPosts error", err),
+    );
+  } catch (e) {
+    console.error("[Firestore] subscribeToTaggedPosts setup failed", e);
+    return () => {};
+  }
+}
+
+export function subscribeToUserProfile(
+  uid: string,
+  callback: (user: User) => void,
+): () => void {
+  try {
+    return onSnapshot(
+      doc(db, "users", uid),
+      (snap) => {
+        if (snap.exists()) {
+          callback({ ...snap.data(), id: snap.id } as User);
+        }
+      },
+      (err) => console.error("[Firestore] subscribeToUserProfile error", err),
+    );
+  } catch (e) {
+    console.error("[Firestore] subscribeToUserProfile setup failed", e);
     return () => {};
   }
 }
@@ -414,7 +502,7 @@ export function subscribeToNotifications(
   try {
     const q = query(
       collection(db, "notifications"),
-      where("targetUserId", "==", uid),
+      where("userId", "==", uid),
       orderBy("createdAt", "desc"),
     );
     return onSnapshot(
@@ -557,5 +645,233 @@ export function subscribeToFundaes(
   } catch (e) {
     console.error("[Firestore] subscribeToFundaes setup failed", e);
     return () => {};
+  }
+}
+
+// ---- Notifications (create + unread count) ----
+export async function createNotification(data: {
+  userId: string;
+  senderId: string;
+  senderName: string;
+  senderAvatar: string;
+  type: "like" | "comment" | "follow" | "tag" | "share";
+  postId?: string;
+  postImage?: string;
+  text?: string;
+}): Promise<void> {
+  try {
+    await addDoc(collection(db, "notifications"), {
+      ...data,
+      createdAt: serverTimestamp(),
+      isRead: false,
+    });
+  } catch (e) {
+    console.error("[Firestore] createNotification failed", e);
+  }
+}
+
+export function subscribeToUnreadNotificationCount(
+  uid: string,
+  callback: (count: number) => void,
+): () => void {
+  try {
+    const q = query(
+      collection(db, "notifications"),
+      where("userId", "==", uid),
+      where("isRead", "==", false),
+    );
+    return onSnapshot(
+      q,
+      (snap) => callback(snap.size),
+      (err) =>
+        console.error(
+          "[Firestore] subscribeToUnreadNotificationCount error",
+          err,
+        ),
+    );
+  } catch (e) {
+    console.error(
+      "[Firestore] subscribeToUnreadNotificationCount setup failed",
+      e,
+    );
+    return () => {};
+  }
+}
+
+export async function markNotificationRead(notifId: string): Promise<void> {
+  try {
+    await updateDoc(doc(db, "notifications", notifId), { isRead: true });
+  } catch (e) {
+    console.error("[Firestore] markNotificationRead failed", e);
+  }
+}
+
+export function subscribeToNotificationsFixed(
+  uid: string,
+  callback: (notifications: Record<string, unknown>[]) => void,
+): () => void {
+  try {
+    const q = query(
+      collection(db, "notifications"),
+      where("userId", "==", uid),
+      orderBy("createdAt", "desc"),
+    );
+    return onSnapshot(
+      q,
+      (snap) => {
+        const notifs = snap.docs.map((d) => ({ ...d.data(), id: d.id }));
+        callback(notifs);
+      },
+      (err) =>
+        console.error("[Firestore] subscribeToNotificationsFixed error", err),
+    );
+  } catch (e) {
+    console.error("[Firestore] subscribeToNotificationsFixed setup failed", e);
+    return () => {};
+  }
+}
+
+// ---- Follow system ----
+export async function followUser(
+  followerId: string,
+  followingId: string,
+): Promise<void> {
+  try {
+    const docId = `${followerId}_${followingId}`;
+    await setDoc(doc(db, "follows", docId), {
+      followerId,
+      followingId,
+      createdAt: serverTimestamp(),
+    });
+    await updateDoc(doc(db, "users", followingId), {
+      followers:
+        (await getDoc(doc(db, "users", followingId))).data()?.followers + 1 ||
+        1,
+    });
+    await updateDoc(doc(db, "users", followerId), {
+      following:
+        (await getDoc(doc(db, "users", followerId))).data()?.following + 1 || 1,
+    });
+  } catch (e) {
+    console.error("[Firestore] followUser failed", e);
+    throw e;
+  }
+}
+
+export async function unfollowUser(
+  followerId: string,
+  followingId: string,
+): Promise<void> {
+  try {
+    const docId = `${followerId}_${followingId}`;
+    await deleteDoc(doc(db, "follows", docId));
+    const fSnap = await getDoc(doc(db, "users", followingId));
+    const erSnap = await getDoc(doc(db, "users", followerId));
+    await updateDoc(doc(db, "users", followingId), {
+      followers: Math.max(0, (fSnap.data()?.followers ?? 1) - 1),
+    });
+    await updateDoc(doc(db, "users", followerId), {
+      following: Math.max(0, (erSnap.data()?.following ?? 1) - 1),
+    });
+  } catch (e) {
+    console.error("[Firestore] unfollowUser failed", e);
+    throw e;
+  }
+}
+
+export async function isFollowingUser(
+  followerId: string,
+  followingId: string,
+): Promise<boolean> {
+  try {
+    const snap = await getDoc(
+      doc(db, "follows", `${followerId}_${followingId}`),
+    );
+    return snap.exists();
+  } catch (e) {
+    console.error("[Firestore] isFollowingUser failed", e);
+    return false;
+  }
+}
+
+// ---- getOrCreateChat ----
+export async function getOrCreateChat(
+  uid1: string,
+  uid2: string,
+  names: Record<string, string>,
+  avatars: Record<string, string>,
+): Promise<string> {
+  const sorted = [uid1, uid2].sort();
+  const chatId = `${sorted[0]}_${sorted[1]}`;
+  try {
+    const snap = await getDoc(doc(db, "chats", chatId));
+    if (!snap.exists()) {
+      await setDoc(doc(db, "chats", chatId), {
+        participants: [uid1, uid2],
+        participantNames: names,
+        participantAvatars: avatars,
+        lastMessage: "",
+        updatedAt: serverTimestamp(),
+      });
+    }
+    return chatId;
+  } catch (e) {
+    console.error("[Firestore] getOrCreateChat failed", e);
+    throw e;
+  }
+}
+
+// ---- getUserByUsername ----
+export async function getUserByUsername(
+  username: string,
+): Promise<User | null> {
+  try {
+    const q = query(
+      collection(db, "users"),
+      where("username", "==", username.toLowerCase()),
+      limit(1),
+    );
+    const snap = await getDocs(q);
+    if (snap.empty) return null;
+    return { ...snap.docs[0].data(), id: snap.docs[0].id } as User;
+  } catch (e) {
+    console.error("[Firestore] getUserByUsername failed", e);
+    return null;
+  }
+}
+
+// ---- Save new user profile (for username setup after Google sign-in) ----
+export async function saveNewUserProfile(
+  uid: string,
+  profile: User,
+): Promise<void> {
+  await setDoc(doc(db, "users", uid), {
+    ...profile,
+    createdAt: serverTimestamp(),
+  });
+}
+
+// ---- Search users by username prefix ----
+export async function searchUsersByUsername(
+  prefix: string,
+  excludeUid: string,
+): Promise<User[]> {
+  try {
+    const term = prefix.toLowerCase().trim();
+    const q = term
+      ? query(
+          collection(db, "users"),
+          where("username", ">=", term),
+          where("username", "<=", `${term}\uf8ff`),
+          limit(20),
+        )
+      : query(collection(db, "users"), limit(30));
+    const snap = await getDocs(q);
+    return snap.docs
+      .filter((d) => d.id !== excludeUid)
+      .map((d) => ({ ...d.data(), id: d.id }) as User);
+  } catch (e) {
+    console.error("[Firestore] searchUsersByUsername failed", e);
+    return [];
   }
 }

@@ -25,7 +25,9 @@ import {
   deletePost as fbDeletePost,
   updateUserProfile as fbUpdateUserProfile,
   subscribeToHighlights,
-  subscribeToPosts,
+  subscribeToTaggedPosts,
+  subscribeToUserPosts,
+  subscribeToUserProfile,
 } from "../utils/firebaseService";
 
 const USERNAME_COOLDOWN_MS = 30 * 24 * 60 * 60 * 1000;
@@ -35,11 +37,6 @@ function daysUntilUsernameChange(lastChanged: number | undefined): number {
   const diff = USERNAME_COOLDOWN_MS - (Date.now() - lastChanged);
   return diff > 0 ? Math.ceil(diff / (1000 * 60 * 60 * 24)) : 0;
 }
-
-// Highlights from mockData
-
-const SAVED_IMAGES: string[] = [];
-const TAGGED_IMAGES: string[] = [];
 
 export default function Profile() {
   const {
@@ -91,19 +88,47 @@ export default function Profile() {
       addToast("InstiConnect added to home screen!", "success");
     setDeferredPrompt(null);
   };
+
   const [myPosts, setMyPosts] = useState<Post[]>([]);
+  const [taggedPosts, setTaggedPosts] = useState<Post[]>([]);
+  const [liveFollowers, setLiveFollowers] = useState<number>(user.followers);
+  const [liveFollowing, setLiveFollowing] = useState<number>(user.following);
   const [selectedPost, setSelectedPost] = useState<Post | null>(null);
 
-  // Subscribe to this user's posts from Firestore
+  // Subscribe to user's own posts from Firestore (by userId)
   useEffect(() => {
     if (!user.id) return;
-    const unsub = subscribeToPosts((allPosts) => {
-      setMyPosts(allPosts.filter((p) => p.userId === user.id));
+    const unsub = subscribeToUserPosts(
+      user.id,
+      (posts) => setMyPosts(posts),
+      user.id,
+    );
+    return unsub;
+  }, [user.id]);
+
+  // Subscribe to tagged posts
+  useEffect(() => {
+    if (!user.username) return;
+    const unsub = subscribeToTaggedPosts(
+      user.username,
+      (posts) => setTaggedPosts(posts),
+      user.id,
+    );
+    return unsub;
+  }, [user.username, user.id]);
+
+  // Live followers/following from Firestore
+  useEffect(() => {
+    if (!user.id) return;
+    const unsub = subscribeToUserProfile(user.id, (profile) => {
+      setLiveFollowers(profile.followers ?? 0);
+      setLiveFollowing(profile.following ?? 0);
     });
     return unsub;
   }, [user.id]);
 
   // Subscribe to highlights from Firestore
+  const [highlights, setHighlights] = useState<Highlight[]>([]);
   useEffect(() => {
     if (!user.id) return;
     const unsub = subscribeToHighlights(user.id, (items) =>
@@ -111,7 +136,7 @@ export default function Profile() {
     );
     return unsub;
   }, [user.id]);
-  const [highlights, setHighlights] = useState<Highlight[]>([]);
+
   const [viewingHighlight, setViewingHighlight] = useState<Highlight | null>(
     null,
   );
@@ -143,11 +168,9 @@ export default function Profile() {
   const handleAvatarSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    // Show local preview immediately
     const localUrl = URL.createObjectURL(file);
     setEditAvatar(localUrl);
     e.target.value = "";
-    // Upload to Cloudinary
     try {
       const { url } = await uploadToCloudinary(file, "avatars");
       setEditAvatar(url);
@@ -346,8 +369,8 @@ export default function Profile() {
           >
             {[
               { label: "Posts", value: myPosts.length },
-              { label: "Followers", value: user.followers },
-              { label: "Following", value: user.following },
+              { label: "Followers", value: liveFollowers },
+              { label: "Following", value: liveFollowing },
             ].map((s) => (
               <div key={s.label}>
                 <p className="font-bold text-xl">{s.value.toLocaleString()}</p>
@@ -424,13 +447,6 @@ export default function Profile() {
             onClick={() => {
               const name = window.prompt("Name for new highlight:");
               if (name?.trim()) {
-                const newHL: Highlight = {
-                  id: `hl-${Date.now()}`,
-                  title: name.trim(),
-                  emoji: "⭐",
-                  stories: [],
-                };
-                setHighlights((hs) => [...hs, newHL]);
                 addToast(`Highlight "${name.trim()}" created!`, "success");
               }
             }}
@@ -499,7 +515,7 @@ export default function Profile() {
                 data-ocid={`profile.item.${i + 1}`}
               >
                 <img
-                  src={post.image}
+                  src={post.image || post.images?.[0]}
                   alt="post"
                   className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                 />
@@ -524,41 +540,45 @@ export default function Profile() {
           </div>
         )}
 
-        {/* Saved grid */}
+        {/* Saved grid — empty for now */}
         {tab === "saved" && (
-          <div className="grid grid-cols-3 gap-0.5">
-            {SAVED_IMAGES.map((img, i) => (
-              <div
-                key={img}
-                className="aspect-square overflow-hidden"
-                data-ocid={`profile.item.${i + 1}`}
-              >
-                <img
-                  src={img}
-                  alt="saved"
-                  className="w-full h-full object-cover hover:scale-105 transition-transform duration-300"
-                />
-              </div>
-            ))}
+          <div
+            className={`col-span-3 py-12 text-center ${text2}`}
+            data-ocid="profile.empty_state"
+          >
+            <p className="text-3xl mb-2">🔖</p>
+            <p className="font-semibold">No saved posts yet</p>
           </div>
         )}
 
         {/* Tagged grid */}
         {tab === "tagged" && (
           <div className="grid grid-cols-3 gap-0.5">
-            {TAGGED_IMAGES.map((img, i) => (
+            {taggedPosts.length === 0 ? (
               <div
-                key={img}
-                className="aspect-square overflow-hidden"
-                data-ocid={`profile.item.${i + 1}`}
+                className={`col-span-3 py-12 text-center ${text2}`}
+                data-ocid="profile.empty_state"
               >
-                <img
-                  src={img}
-                  alt="tagged"
-                  className="w-full h-full object-cover hover:scale-105 transition-transform duration-300"
-                />
+                <p className="text-3xl mb-2">🏷️</p>
+                <p className="font-semibold">No tagged posts yet</p>
               </div>
-            ))}
+            ) : (
+              taggedPosts.map((p, i) => (
+                <button
+                  key={p.id}
+                  type="button"
+                  onClick={() => setSelectedPost(p)}
+                  className="aspect-square overflow-hidden"
+                  data-ocid={`profile.item.${i + 1}`}
+                >
+                  <img
+                    src={p.image || p.images?.[0]}
+                    alt="tagged"
+                    className="w-full h-full object-cover hover:scale-105 transition-transform duration-300"
+                  />
+                </button>
+              ))
+            )}
           </div>
         )}
       </div>

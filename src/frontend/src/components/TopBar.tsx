@@ -1,13 +1,28 @@
 import { Bell, MessageCircle, Search } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useApp } from "../App";
-import { notifications } from "../mockData";
+import { useAuth } from "../context/AuthContext";
+import { subscribeToUnreadNotificationCount } from "../utils/firebaseService";
 import SearchModal from "./SearchModal";
 
 export default function TopBar() {
   const { theme, navigate } = useApp();
-  const unread = notifications.filter((n) => !n.read).length;
+  const { currentFirebaseUser, userProfile } = useAuth();
+  const [unread, setUnread] = useState(0);
   const [searchOpen, setSearchOpen] = useState(false);
+
+  useEffect(() => {
+    if (!currentFirebaseUser?.uid) return;
+    const unsub = subscribeToUnreadNotificationCount(
+      currentFirebaseUser.uid,
+      setUnread,
+    );
+    return unsub;
+  }, [currentFirebaseUser?.uid]);
+
+  const avatarSrc =
+    userProfile?.avatar ||
+    `https://picsum.photos/seed/${currentFirebaseUser?.uid ?? "user"}/100/100`;
 
   return (
     <>
@@ -72,7 +87,7 @@ export default function TopBar() {
             style={{ borderColor: "#7C3AED" }}
           >
             <img
-              src="https://picsum.photos/seed/user1/100/100"
+              src={avatarSrc}
               alt="me"
               className="w-full h-full object-cover"
             />

@@ -24,6 +24,7 @@ import OtherProfile from "./pages/OtherProfile";
 import Plans from "./pages/Plans";
 import Profile from "./pages/Profile";
 import Settings from "./pages/Settings";
+import UsernameSetup from "./pages/UsernameSetup";
 
 export type Page =
   | "home"
@@ -37,7 +38,8 @@ export type Page =
   | "notifications"
   | "settings"
   | "login"
-  | "onboarding";
+  | "onboarding"
+  | "username-setup";
 
 export type AccentTheme = "pride" | "blue" | "pink";
 
@@ -75,12 +77,16 @@ export const useApp = () => useContext(AppContext);
 
 // Bridge: syncs Firebase auth state -> AppContext user and handles navigation
 function AuthSync() {
-  const { userProfile, loading } = useAuth();
+  const { userProfile, loading, needsUsernameSetup } = useAuth();
   const { setUser, page, navigate } = useApp();
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: page/navigate/setUser are stable
   useEffect(() => {
     if (loading) return;
+    if (needsUsernameSetup) {
+      navigate("username-setup");
+      return;
+    }
     if (userProfile) {
       setUser(userProfile);
       if (page === "login" || page === "onboarding") {
@@ -88,9 +94,11 @@ function AuthSync() {
       }
     } else {
       setUser(null);
-      navigate("login");
+      if (page !== "username-setup") {
+        navigate("login");
+      }
     }
-  }, [userProfile, loading]);
+  }, [userProfile, loading, needsUsernameSetup]);
 
   return null;
 }
@@ -101,6 +109,7 @@ const PAGES_NO_TOP: Page[] = [
   "login",
   "onboarding",
   "other-profile",
+  "username-setup",
 ];
 const SWIPEABLE_TABS: Page[] = ["home", "plans", "discuss"];
 
@@ -221,6 +230,13 @@ export default function App() {
   const hideTopForPage = ["notifications", "settings"].includes(page);
 
   const renderPage = () => {
+    if (page === "username-setup") {
+      return (
+        <div key="username-setup" className="page-enter">
+          <UsernameSetup />
+        </div>
+      );
+    }
     if (!user) {
       if (page === "onboarding") {
         return (

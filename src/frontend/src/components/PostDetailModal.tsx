@@ -13,6 +13,10 @@ import { useEffect, useRef, useState } from "react";
 import { useApp } from "../App";
 import { useAuth } from "../context/AuthContext";
 import type { Comment, Post } from "../mockData";
+import {
+  createNotification,
+  addComment as fbAddComment,
+} from "../utils/firebaseService";
 import PostCarousel from "./PostCarousel";
 
 interface PostDetailModalProps {
@@ -61,13 +65,14 @@ export default function PostDetailModal({
     addToast(updated.saved ? "Post saved!" : "Post unsaved", "success");
   };
 
-  const handleAddComment = () => {
+  const handleAddComment = async () => {
     const text = commentText.trim();
-    if (!text) return;
+    if (!text || !userProfile) return;
+    setCommentText("");
     const newComment: Comment = {
       id: Math.random().toString(36).slice(2),
-      username: userProfile?.username ?? "You",
-      avatar: userProfile?.avatar ?? "https://picsum.photos/seed/me/100/100",
+      username: userProfile.username ?? "You",
+      avatar: userProfile.avatar ?? "https://picsum.photos/seed/me/100/100",
       text,
       time: "now",
       likes: 0,
@@ -78,7 +83,28 @@ export default function PostDetailModal({
     };
     setPost(updated);
     onUpdate?.(updated);
-    setCommentText("");
+    try {
+      await fbAddComment(post.id, {
+        userId: userProfile.id,
+        username: userProfile.username,
+        avatar: userProfile.avatar ?? "",
+        text,
+      });
+      if (post.userId && post.userId !== userProfile.id) {
+        await createNotification({
+          userId: post.userId,
+          senderId: userProfile.id,
+          senderName: userProfile.name || userProfile.username,
+          senderAvatar: userProfile.avatar ?? "",
+          type: "comment",
+          postId: post.id,
+          postImage: (post as any).image || (post as any).mediaUrl,
+          text,
+        });
+      }
+    } catch (e) {
+      console.error("[PostDetailModal] comment failed", e);
+    }
   };
 
   const handleDelete = () => {

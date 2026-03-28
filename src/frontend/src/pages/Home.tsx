@@ -13,9 +13,11 @@ import PostCarousel from "../components/PostCarousel";
 import StoryCreator from "../components/StoryCreator";
 import StoryViewer from "../components/StoryViewer";
 
+import ShareModal from "../components/ShareModal";
 import { useAuth } from "../context/AuthContext";
 import type { Post, Story } from "../mockData";
 import {
+  createNotification,
   addComment as fbAddComment,
   deletePost as fbDeletePost,
   toggleLike as fbToggleLike,
@@ -43,6 +45,11 @@ export default function Home() {
     {},
   );
   const [storyCreatorOpen, setStoryCreatorOpen] = useState(false);
+  const [shareTarget, setShareTarget] = useState<{
+    postId: string;
+    postImage?: string;
+    ownerId?: string;
+  } | null>(null);
 
   // Pull-to-refresh state
   const feedRef = useRef<HTMLDivElement>(null);
@@ -54,9 +61,10 @@ export default function Home() {
 
   // Subscribe to Firestore (fallback to mock if not configured)
   useEffect(() => {
+    const uid = realUser?.id;
     const unsubPosts = subscribeToPosts((firestorePosts) => {
       setPosts(firestorePosts);
-    });
+    }, uid);
     const unsubStories = subscribeToStories((firestoreStories) => {
       setStories(firestoreStories);
     });
@@ -64,7 +72,7 @@ export default function Home() {
       unsubPosts();
       unsubStories();
     };
-  }, []);
+  }, [realUser?.id]);
 
   // Register this page's post handler with global App context
   useEffect(() => {
@@ -101,7 +109,21 @@ export default function Home() {
           : p,
       ),
     );
-    if (uid) void fbToggleLike(postId, uid, isLiking);
+    if (uid) {
+      void fbToggleLike(postId, uid, isLiking);
+      // Send like notification (only when liking, not unliking, and not own post)
+      if (isLiking && post.userId && post.userId !== uid) {
+        void createNotification({
+          userId: post.userId,
+          senderId: uid,
+          senderName: realUser?.name ?? realUser?.username ?? "Someone",
+          senderAvatar: realUser?.avatar ?? "",
+          type: "like",
+          postId,
+          postImage: post.image,
+        });
+      }
+    }
     setLikedAnim((s) => {
       const n = new Set(s);
       n.add(postId);
@@ -163,6 +185,19 @@ export default function Home() {
     setCommentInputs((ci) => ({ ...ci, [postId]: "" }));
     if (userId) {
       void fbAddComment(postId, { username, avatar, text, userId });
+      // Send comment notification (not own post)
+      const post = posts.find((p) => p.id === postId);
+      if (post?.userId && post.userId !== userId) {
+        void createNotification({
+          userId: post.userId,
+          senderId: userId,
+          senderName: realUser?.name ?? username,
+          senderAvatar: avatar,
+          type: "comment",
+          postId,
+          text,
+        });
+      }
     }
   };
 
@@ -432,7 +467,15 @@ export default function Home() {
                 </button>
                 <button
                   type="button"
+                  onClick={() =>
+                    setShareTarget({
+                      postId: post.id,
+                      postImage: post.image,
+                      ownerId: post.userId,
+                    })
+                  }
                   className="transition-transform active:scale-90"
+                  data-ocid="home.button"
                 >
                   <Send
                     size={22}
@@ -583,6 +626,15 @@ export default function Home() {
         <StoryCreator
           onPublish={handleStoryPublish}
           onClose={() => setStoryCreatorOpen(false)}
+        />
+      )}
+      {shareTarget && (
+        <ShareModal
+          open={!!shareTarget}
+          onClose={() => setShareTarget(null)}
+          postId={shareTarget.postId}
+          postImage={shareTarget.postImage}
+          postOwnerId={shareTarget.ownerId}
         />
       )}
     </div>

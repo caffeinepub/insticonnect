@@ -32,6 +32,8 @@ interface AuthContextType {
   signInWithGoogle: () => Promise<void>;
   signOut: () => Promise<void>;
   loading: boolean;
+  needsUsernameSetup: boolean;
+  setNeedsUsernameSetup: (v: boolean) => void;
 }
 
 const AuthContext = createContext<AuthContextType>(null!);
@@ -44,6 +46,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     useState<FirebaseUser | null>(null);
   const [userProfile, setUserProfile] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [needsUsernameSetup, setNeedsUsernameSetup] = useState(false);
 
   const fetchUserProfile = useCallback(
     async (fbUser: FirebaseUser): Promise<User> => {
@@ -52,26 +55,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (snap.exists()) {
           return snap.data() as User;
         }
-        // Create default profile from Firebase user
-        const profile: User = {
-          id: fbUser.uid,
-          name: fbUser.displayName ?? "InstiConnect User",
-          username:
-            fbUser.email?.split("@")[0].replace(/[^a-z0-9_]/gi, "_") ?? "user",
-          email: fbUser.email ?? "",
-          avatar:
-            fbUser.photoURL ??
-            `https://picsum.photos/seed/${fbUser.uid}/100/100`,
-          bio: "Hey, I'm on InstiConnect!",
-          followers: 0,
-          following: 0,
-          posts: 0,
-        };
-        await setDoc(doc(db, "users", fbUser.uid), {
-          ...profile,
-          createdAt: serverTimestamp(),
-        });
-        return profile;
+        // For Google sign-in without a profile, return null to trigger username setup
+        // (username setup page will create the profile)
+        return null as unknown as User;
       } catch (e) {
         console.warn("[AuthContext] fetchUserProfile failed", e);
         throw e;
@@ -89,9 +75,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setCurrentFirebaseUser(fbUser);
       if (fbUser) {
         const profile = await fetchUserProfile(fbUser);
-        setUserProfile(profile);
+        if (profile) {
+          setUserProfile(profile);
+          setNeedsUsernameSetup(false);
+        } else {
+          setUserProfile(null);
+          setNeedsUsernameSetup(true); // Profile not found - trigger username setup
+        }
       } else {
         setUserProfile(null);
+        setNeedsUsernameSetup(false);
       }
       setLoading(false);
     });
@@ -140,7 +133,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       throw new Error(
         "Firebase not configured. Add credentials to firebase.ts",
       );
-    await signInWithPopup(auth, googleProvider);
+    const cred = await signInWithPopup(auth, googleProvider);
+    // Check if user profile exists; if not, prompt for username
+    const snap = await getDoc(doc(db, "users", cred.user.uid));
+    if (!snap.exists()) {
+      setNeedsUsernameSetup(true);
+    }
   };
 
   const signOut = async () => {
@@ -160,6 +158,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         signInWithGoogle,
         signOut,
         loading,
+        needsUsernameSetup,
+        setNeedsUsernameSetup,
       }}
     >
       {children}

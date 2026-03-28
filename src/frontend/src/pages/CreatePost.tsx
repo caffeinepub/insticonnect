@@ -12,7 +12,11 @@ import { useApp } from "../App";
 import { useAuth } from "../context/AuthContext";
 import type { Post } from "../mockData";
 import { uploadToCloudinary } from "../utils/cloudinary";
-import { addPost } from "../utils/firebaseService";
+import {
+  addPost,
+  createNotification,
+  getUserByUsername,
+} from "../utils/firebaseService";
 
 interface CreatePostProps {
   onPost: (post: Post) => void;
@@ -105,6 +109,12 @@ export default function CreatePost({ onPost, onClose }: CreatePostProps) {
       }
     }
 
+    // Parse tagged usernames from input
+    const taggedUsernames = tagPeople
+      .split(/[,\s]+/)
+      .map((t) => t.replace(/^@/, "").trim().toLowerCase())
+      .filter(Boolean);
+
     const postData = {
       userId: realUser?.id ?? "unknown",
       username: isAnon ? "anonymous" : (realUser?.username ?? "user"),
@@ -122,6 +132,7 @@ export default function CreatePost({ onPost, onClose }: CreatePostProps) {
       time: "just now",
       isAnonymous: isAnon,
       isPrivate: false,
+      taggedUsers: taggedUsernames,
     };
 
     // Save to Firestore
@@ -130,6 +141,24 @@ export default function CreatePost({ onPost, onClose }: CreatePostProps) {
     console.log("[CreatePost] Saved with ID:", docId);
     const newPost: Post = { ...postData, id: docId };
     onPost(newPost);
+
+    // Send tag notifications
+    if (!isAnon && realUser?.id && taggedUsernames.length > 0) {
+      for (const uname of taggedUsernames) {
+        const taggedUser = await getUserByUsername(uname);
+        if (taggedUser && taggedUser.id !== realUser.id) {
+          void createNotification({
+            userId: taggedUser.id,
+            senderId: realUser.id,
+            senderName: realUser.name,
+            senderAvatar: realUser.avatar,
+            type: "tag",
+            postId: docId,
+            postImage: finalImages[0],
+          });
+        }
+      }
+    }
   };
 
   const inputClass = `w-full px-4 py-3 rounded-2xl text-sm outline-none border ${

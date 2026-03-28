@@ -77,10 +77,7 @@ export default function Onboarding() {
     setDirection(dir);
     if (dir === "forward") {
       if (step === 0) {
-        if (!email.endsWith("@smail.iitm.ac.in")) {
-          setEmailError("Must use @smail.iitm.ac.in email");
-          return;
-        }
+        // smail restriction removed
         if (!name.trim()) {
           setEmailError("Please enter your name");
           return;
@@ -198,7 +195,7 @@ export default function Onboarding() {
                 id="onboard-email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="yourname@smail.iitm.ac.in"
+                placeholder="your@email.com"
                 className={`mt-1.5 w-full px-4 py-3 rounded-2xl border text-sm outline-none transition-all ${
                   theme === "dark"
                     ? "bg-white/5 border-white/10 focus:border-purple-500"

@@ -163,7 +163,7 @@ export default function Login() {
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="your@smail.iitm.ac.in"
+                placeholder="Email address"
                 className={inputCls}
                 onKeyDown={(e) => e.key === "Enter" && signIn()}
                 data-ocid="login.input"
@@ -447,7 +447,7 @@ export default function Login() {
                   type="email"
                   value={resetEmail}
                   onChange={(e) => setResetEmail(e.target.value)}
-                  placeholder="your@smail.iitm.ac.in"
+                  placeholder="Email address"
                   className={inputCls}
                   onKeyDown={(e) => e.key === "Enter" && handleResetPassword()}
                   data-ocid="login.input"

@@ -3,18 +3,24 @@ import { useEffect, useRef, useState } from "react";
 import { useApp } from "../App";
 import { useAuth } from "../context/AuthContext";
 import type { ChatMessage } from "../mockData";
+import { uploadToCloudinary } from "../utils/cloudinary";
 import {
   deleteMessage as fbDeleteMessage,
   sendMessage as fbSendMessage,
+  getUserById,
   subscribeToMessages,
 } from "../utils/firebaseService";
 
 interface ExtendedMessage extends ChatMessage {
   imageUrl?: string;
+  type?: string;
+  postId?: string;
+  storyId?: string;
+  postImage?: string;
 }
 
 export default function ChatScreen() {
-  const { theme, goBack, navigate, pageMeta } = useApp();
+  const { theme, goBack, navigate, pageMeta, addToast } = useApp();
   const chatId = pageMeta.chatId as string;
   const isGroup = pageMeta.isGroup as boolean | undefined;
   const chatName = pageMeta.chatName as string | undefined;
@@ -22,8 +28,17 @@ export default function ChatScreen() {
 
   const isGroupChat = isGroup || chatId?.startsWith("plan-");
 
-  const displayName = chatName ?? "Chat";
-  const displayAvatar: string | null = null;
+  const [otherUser, setOtherUser] = useState<{
+    name: string;
+    avatar: string;
+  } | null>(null);
+
+  const displayName = isGroupChat
+    ? (chatName ?? "Group Chat")
+    : (otherUser?.name ?? chatName ?? "Chat");
+  const displayAvatar: string | null = isGroupChat
+    ? null
+    : (otherUser?.avatar ?? null);
   const isOnline = false;
 
   const [messages, setMessages] = useState<ExtendedMessage[]>([]);
@@ -35,6 +50,18 @@ export default function ChatScreen() {
   const { userProfile } = useAuth();
 
   useEffect(() => {
+    if (isGroupChat || !chatId || !userProfile) return;
+    const parts = chatId.split("_");
+    const otherId = parts.find((p) => p !== userProfile.id);
+    if (otherId) {
+      getUserById(otherId).then((u) => {
+        if (u)
+          setOtherUser({ name: u.name || u.username, avatar: u.avatar ?? "" });
+      });
+    }
+  }, [chatId, userProfile, isGroupChat]);
+
+  useEffect(() => {
     if (!chatId) return;
     const unsub = subscribeToMessages(chatId, (msgs) => {
       const converted: ExtendedMessage[] = msgs.map((m) => ({
@@ -42,6 +69,10 @@ export default function ChatScreen() {
         senderId: String(m.senderId ?? ""),
         text: String(m.text ?? ""),
         imageUrl: m.imageUrl ? String(m.imageUrl) : undefined,
+        type: m.type ? String(m.type) : undefined,
+        postId: m.postId ? String(m.postId) : undefined,
+        storyId: m.storyId ? String(m.storyId) : undefined,
+        postImage: m.postImage ? String(m.postImage) : undefined,
         time:
           m.createdAt && typeof (m.createdAt as any).toDate === "function"
             ? (m.createdAt as any)
@@ -66,6 +97,7 @@ export default function ChatScreen() {
     await fbSendMessage(chatId, {
       senderId,
       text,
+      type: imageUrl ? "media" : "text",
       imageUrl: imageUrl ?? null,
       time: new Date().toLocaleTimeString([], {
         hour: "2-digit",
@@ -75,12 +107,16 @@ export default function ChatScreen() {
     console.log("[Chat] Message sent to", chatId);
   };
 
-  const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImageSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    const url = URL.createObjectURL(file);
-    send(url);
     e.target.value = "";
+    try {
+      const result = await uploadToCloudinary(file);
+      await send(result.url);
+    } catch {
+      addToast("Failed to upload image", "error");
+    }
   };
 
   const handleBack = () => {
@@ -208,7 +244,6 @@ export default function ChatScreen() {
               key={msg.id}
               className={`flex ${isMine ? "justify-end" : "justify-start"}`}
             >
-              {/* biome-ignore lint/a11y/useKeyWithClickEvents: long press message */}
               <div
                 className={`max-w-[75%] ${
                   msg.imageUrl ? "" : "px-4 py-2.5"
@@ -254,7 +289,28 @@ export default function ChatScreen() {
                   }
                 }}
               >
-                {msg.imageUrl ? (
+                {msg.type === "post" ? (
+                  <div className="rounded-2xl overflow-hidden max-w-[200px]">
+                    {msg.postImage && (
+                      <img
+                        src={msg.postImage}
+                        alt="post"
+                        className="w-full block"
+                      />
+                    )}
+                    <div
+                      className={`px-3 py-2 text-xs ${isMine ? "text-white/80" : isDark ? "text-gray-400" : "text-gray-500"}`}
+                    >
+                      📤 Shared a post
+                    </div>
+                  </div>
+                ) : msg.type === "story" ? (
+                  <div
+                    className={`px-4 py-3 rounded-2xl text-xs ${isMine ? "text-white/80" : isDark ? "text-gray-400" : "text-gray-500"}`}
+                  >
+                    📖 Shared a story
+                  </div>
+                ) : msg.imageUrl ? (
                   <img
                     src={msg.imageUrl}
                     alt="sent"
