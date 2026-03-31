@@ -13,7 +13,8 @@ export default function BottomSheet({ open, onClose, title, children }: Props) {
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-[90] flex items-end justify-center">
+    // Start the overlay at top-14 (56px) so it never covers the fixed TopBar
+    <div className="fixed inset-x-0 bottom-0 top-14 z-[39] flex items-end justify-center">
       {/* Backdrop */}
       <div
         className="absolute inset-0 bg-black/50 backdrop-blur-sm"
@@ -27,7 +28,7 @@ export default function BottomSheet({ open, onClose, title, children }: Props) {
       <div
         className={`sheet-enter relative w-full max-w-[430px] rounded-t-3xl pb-safe ${
           theme === "dark" ? "bg-[#1A1D27]" : "bg-white"
-        } shadow-2xl max-h-[90vh] overflow-y-auto`}
+        } shadow-2xl max-h-[85vh] overflow-y-auto`}
       >
         {/* Handle */}
         <div className="flex justify-center pt-3 pb-1">

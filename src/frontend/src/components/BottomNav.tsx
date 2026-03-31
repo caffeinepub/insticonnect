@@ -1,5 +1,6 @@
 import {
   Calendar,
+  Clock,
   Home,
   ImagePlus,
   MapPin,
@@ -50,6 +51,8 @@ export default function BottomNav() {
   const [planLocation, setPlanLocation] = useState("");
   const [planSlots, setPlanSlots] = useState("");
   const [planCategory, setPlanCategory] = useState("Social");
+  const [planDate, setPlanDate] = useState("");
+  const [planTime, setPlanTime] = useState("");
   const [planLoading, setPlanLoading] = useState(false);
 
   const openSheet = () => {
@@ -65,6 +68,8 @@ export default function BottomNav() {
     setPlanLocation("");
     setPlanSlots("");
     setPlanCategory("Social");
+    setPlanDate("");
+    setPlanTime("");
   };
 
   const handleNewPost = () => {
@@ -86,7 +91,10 @@ export default function BottomNav() {
       joined: 1,
       isJoined: false,
       organizer,
-      time: "Today",
+      time:
+        planDate && planTime
+          ? `${planDate} at ${planTime}`
+          : planDate || planTime || "TBD",
       location: planLocation.trim() || "TBD",
     };
     try {
@@ -159,21 +167,21 @@ export default function BottomNav() {
         <div className="flex items-center justify-around px-2 h-16">
           {leftTabs.map(renderTab)}
 
-          {/* Center Action Button */}
+          {/* Center Action Button — flush in nav bar */}
           <button
             type="button"
             onClick={openSheet}
-            className="flex flex-col items-center gap-0.5 -mt-5"
+            className="flex flex-col items-center gap-0.5 px-3 py-1.5 transition-all active:scale-90"
             data-ocid="bottom_nav.create_post"
           >
             <div
-              className="w-14 h-14 rounded-full btn-gradient flex items-center justify-center shadow-lg active:scale-90 transition-transform"
-              style={{ boxShadow: "0 6px 24px rgba(124,58,237,0.45)" }}
+              className="w-11 h-11 rounded-2xl btn-gradient flex items-center justify-center shadow-md transition-transform"
+              style={{ boxShadow: "0 4px 16px rgba(124,58,237,0.4)" }}
             >
-              <Plus size={28} className="text-white" strokeWidth={2.5} />
+              <Plus size={22} className="text-white" strokeWidth={2.5} />
             </div>
             <span
-              className={`text-[10px] font-medium mt-0.5 ${
+              className={`text-[10px] font-medium ${
                 theme === "dark" ? "text-gray-400" : "text-gray-500"
               }`}
             >
@@ -199,167 +207,248 @@ export default function BottomNav() {
           }}
         >
           <div
-            className={`w-full max-w-[430px] rounded-t-3xl p-5 pb-10 ${
+            className={`w-full max-w-[430px] rounded-t-3xl ${
               theme === "dark" ? "bg-[#1A1D27]" : "bg-white"
             } shadow-2xl`}
             style={{ animation: "slideUp 0.25s ease" }}
           >
-            {/* Header */}
-            <div className="flex items-center justify-between mb-5">
-              <h3 className="text-lg font-bold">
-                {mode === "select" ? "Create" : "New Plan"}
-              </h3>
-              <button
-                type="button"
-                onClick={closeSheet}
-                className={`w-8 h-8 rounded-full flex items-center justify-center ${
-                  theme === "dark" ? "bg-white/10" : "bg-gray-100"
-                }`}
-              >
-                <X size={16} />
-              </button>
-            </div>
-
-            {mode === "select" ? (
-              // Option cards
-              <div className="grid grid-cols-2 gap-3">
-                {/* New Post */}
+            {/* Scrollable content */}
+            <div className="max-h-[80vh] overflow-y-auto p-5 pb-10">
+              {/* Header */}
+              <div className="flex items-center justify-between mb-5">
+                <h3 className="text-lg font-bold">
+                  {mode === "select" ? "Create" : "New Plan"}
+                </h3>
                 <button
                   type="button"
-                  onClick={handleNewPost}
-                  className={`flex flex-col items-center gap-3 p-5 rounded-2xl border-2 transition-all active:scale-95 ${
-                    theme === "dark"
-                      ? "border-white/10 bg-white/5 hover:border-purple-500/50"
-                      : "border-gray-100 bg-gray-50 hover:border-purple-200"
+                  onClick={closeSheet}
+                  className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                    theme === "dark" ? "bg-white/10" : "bg-gray-100"
                   }`}
                 >
-                  <div className="w-12 h-12 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center">
-                    <ImagePlus size={22} className="text-white" />
-                  </div>
-                  <div className="text-center">
-                    <p className="font-semibold text-sm">New Post</p>
-                    <p
-                      className={`text-xs mt-0.5 ${theme === "dark" ? "text-gray-400" : "text-gray-500"}`}
-                    >
-                      Photo or carousel
-                    </p>
-                  </div>
-                </button>
-
-                {/* New Plan */}
-                <button
-                  type="button"
-                  onClick={() => setMode("plan")}
-                  className={`flex flex-col items-center gap-3 p-5 rounded-2xl border-2 transition-all active:scale-95 ${
-                    theme === "dark"
-                      ? "border-white/10 bg-white/5 hover:border-purple-500/50"
-                      : "border-gray-100 bg-gray-50 hover:border-purple-200"
-                  }`}
-                >
-                  <div className="w-12 h-12 rounded-full bg-gradient-to-br from-orange-400 to-pink-500 flex items-center justify-center">
-                    <Calendar size={22} className="text-white" />
-                  </div>
-                  <div className="text-center">
-                    <p className="font-semibold text-sm">New Plan</p>
-                    <p
-                      className={`text-xs mt-0.5 ${theme === "dark" ? "text-gray-400" : "text-gray-500"}`}
-                    >
-                      Campus activity
-                    </p>
-                  </div>
+                  <X size={16} />
                 </button>
               </div>
-            ) : (
-              // Plan creation form
-              <div className="space-y-3">
-                {/* Plan Name */}
-                <input
-                  value={planName}
-                  onChange={(e) => setPlanName(e.target.value)}
-                  placeholder="Plan name (e.g. Football at SAC)"
-                  className={inputCls}
-                />
 
-                {/* Category */}
-                <div>
-                  <p
-                    className={`text-xs font-semibold mb-2 ${
-                      theme === "dark" ? "text-gray-400" : "text-gray-500"
+              {mode === "select" ? (
+                // Option cards
+                <div className="grid grid-cols-2 gap-3">
+                  {/* New Post */}
+                  <button
+                    type="button"
+                    onClick={handleNewPost}
+                    className={`flex flex-col items-center gap-3 p-5 rounded-2xl border-2 transition-all active:scale-95 ${
+                      theme === "dark"
+                        ? "border-white/10 bg-white/5 hover:border-purple-500/50"
+                        : "border-gray-100 bg-gray-50 hover:border-purple-200"
                     }`}
                   >
-                    Category
-                  </p>
-                  <div className="flex flex-wrap gap-2">
-                    {PLAN_CATEGORIES.map((cat) => (
-                      <button
-                        type="button"
-                        key={cat}
-                        onClick={() => setPlanCategory(cat)}
-                        className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${
-                          planCategory === cat
-                            ? `bg-gradient-to-r ${CATEGORY_COLORS[cat]} text-white shadow-md`
-                            : theme === "dark"
-                              ? "bg-white/10 text-gray-300"
-                              : "bg-gray-100 text-gray-600"
-                        }`}
+                    <div className="w-12 h-12 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center">
+                      <ImagePlus size={22} className="text-white" />
+                    </div>
+                    <div className="text-center">
+                      <p className="font-semibold text-sm">New Post</p>
+                      <p
+                        className={`text-xs mt-0.5 ${theme === "dark" ? "text-gray-400" : "text-gray-500"}`}
                       >
-                        {cat}
-                      </button>
-                    ))}
-                  </div>
+                        Photo or carousel
+                      </p>
+                    </div>
+                  </button>
+
+                  {/* New Plan */}
+                  <button
+                    type="button"
+                    onClick={() => setMode("plan")}
+                    className={`flex flex-col items-center gap-3 p-5 rounded-2xl border-2 transition-all active:scale-95 ${
+                      theme === "dark"
+                        ? "border-white/10 bg-white/5 hover:border-purple-500/50"
+                        : "border-gray-100 bg-gray-50 hover:border-purple-200"
+                    }`}
+                  >
+                    <div className="w-12 h-12 rounded-full bg-gradient-to-br from-orange-400 to-pink-500 flex items-center justify-center">
+                      <Calendar size={22} className="text-white" />
+                    </div>
+                    <div className="text-center">
+                      <p className="font-semibold text-sm">New Plan</p>
+                      <p
+                        className={`text-xs mt-0.5 ${theme === "dark" ? "text-gray-400" : "text-gray-500"}`}
+                      >
+                        Campus activity
+                      </p>
+                    </div>
+                  </button>
                 </div>
-
-                {/* Description */}
-                <textarea
-                  value={planDesc}
-                  onChange={(e) => setPlanDesc(e.target.value)}
-                  placeholder="Description (optional)"
-                  rows={2}
-                  className={`${inputCls} resize-none`}
-                />
-
-                {/* Location + Slots row */}
-                <div className="grid grid-cols-2 gap-2">
-                  <div className="relative">
-                    <MapPin
-                      size={14}
-                      className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
-                    />
+              ) : (
+                // Plan creation form
+                <div className="space-y-3">
+                  {/* Plan Name */}
+                  <div>
+                    <p
+                      className={`text-xs font-semibold mb-1.5 ${
+                        theme === "dark" ? "text-gray-400" : "text-gray-500"
+                      }`}
+                    >
+                      Plan Name *
+                    </p>
                     <input
-                      value={planLocation}
-                      onChange={(e) => setPlanLocation(e.target.value)}
-                      placeholder="Location"
-                      className={`${inputCls} pl-8`}
+                      value={planName}
+                      onChange={(e) => setPlanName(e.target.value)}
+                      placeholder="e.g. Football at SAC"
+                      className={inputCls}
                     />
                   </div>
-                  <div className="relative">
-                    <Users
-                      size={14}
-                      className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
-                    />
-                    <input
-                      value={planSlots}
-                      onChange={(e) => setPlanSlots(e.target.value)}
-                      placeholder="Slots"
-                      type="number"
-                      min={2}
-                      max={50}
-                      className={`${inputCls} pl-8`}
+
+                  {/* Category */}
+                  <div>
+                    <p
+                      className={`text-xs font-semibold mb-2 ${
+                        theme === "dark" ? "text-gray-400" : "text-gray-500"
+                      }`}
+                    >
+                      Category
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      {PLAN_CATEGORIES.map((cat) => (
+                        <button
+                          type="button"
+                          key={cat}
+                          onClick={() => setPlanCategory(cat)}
+                          className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${
+                            planCategory === cat
+                              ? `bg-gradient-to-r ${CATEGORY_COLORS[cat]} text-white shadow-md`
+                              : theme === "dark"
+                                ? "bg-white/10 text-gray-300"
+                                : "bg-gray-100 text-gray-600"
+                          }`}
+                        >
+                          {cat}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Slots */}
+                  <div>
+                    <p
+                      className={`text-xs font-semibold mb-1.5 ${
+                        theme === "dark" ? "text-gray-400" : "text-gray-500"
+                      }`}
+                    >
+                      How many slots?
+                    </p>
+                    <div className="relative">
+                      <Users
+                        size={14}
+                        className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+                      />
+                      <input
+                        value={planSlots}
+                        onChange={(e) => setPlanSlots(e.target.value)}
+                        placeholder="e.g. 10 (max 50)"
+                        type="number"
+                        min={2}
+                        max={50}
+                        className={`${inputCls} pl-8`}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Date & Time */}
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <p
+                        className={`text-xs font-semibold mb-1.5 ${theme === "dark" ? "text-gray-400" : "text-gray-500"}`}
+                      >
+                        Date
+                      </p>
+                      <div className="relative">
+                        <Calendar
+                          size={14}
+                          className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+                        />
+                        <input
+                          type="date"
+                          value={planDate}
+                          onChange={(e) => setPlanDate(e.target.value)}
+                          className={`${inputCls} pl-8`}
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <p
+                        className={`text-xs font-semibold mb-1.5 ${theme === "dark" ? "text-gray-400" : "text-gray-500"}`}
+                      >
+                        Time
+                      </p>
+                      <div className="relative">
+                        <Clock
+                          size={14}
+                          className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+                        />
+                        <input
+                          type="time"
+                          value={planTime}
+                          onChange={(e) => setPlanTime(e.target.value)}
+                          className={`${inputCls} pl-8`}
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Location */}
+                  <div>
+                    <p
+                      className={`text-xs font-semibold mb-1.5 ${
+                        theme === "dark" ? "text-gray-400" : "text-gray-500"
+                      }`}
+                    >
+                      Location (optional)
+                    </p>
+                    <div className="relative">
+                      <MapPin
+                        size={14}
+                        className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+                      />
+                      <input
+                        value={planLocation}
+                        onChange={(e) => setPlanLocation(e.target.value)}
+                        placeholder="e.g. SAC Ground"
+                        className={`${inputCls} pl-8`}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Description */}
+                  <div>
+                    <p
+                      className={`text-xs font-semibold mb-1.5 ${
+                        theme === "dark" ? "text-gray-400" : "text-gray-500"
+                      }`}
+                    >
+                      Description (optional)
+                    </p>
+                    <textarea
+                      value={planDesc}
+                      onChange={(e) => setPlanDesc(e.target.value)}
+                      placeholder="What's the plan about?"
+                      rows={2}
+                      className={`${inputCls} resize-none`}
                     />
                   </div>
+
+                  {/* Submit */}
+                  <button
+                    type="button"
+                    onClick={handleCreatePlan}
+                    disabled={!planName.trim() || planLoading}
+                    className="w-full py-3.5 rounded-2xl text-white font-semibold text-sm btn-gradient disabled:opacity-40 transition-all active:scale-95"
+                  >
+                    {planLoading ? "Creating..." : "Create Plan"}
+                  </button>
                 </div>
-
-                {/* Submit */}
-                <button
-                  type="button"
-                  onClick={handleCreatePlan}
-                  disabled={!planName.trim() || planLoading}
-                  className="w-full py-3.5 rounded-2xl text-white font-semibold text-sm btn-gradient disabled:opacity-40 transition-all active:scale-95"
-                >
-                  {planLoading ? "Creating..." : "Create Plan"}
-                </button>
-              </div>
-            )}
+              )}
+            </div>
           </div>
         </div>
       )}

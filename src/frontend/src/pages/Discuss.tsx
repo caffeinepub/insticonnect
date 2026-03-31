@@ -5,7 +5,7 @@ import {
   Plus,
   TrendingUp,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useApp } from "../App";
 import BottomSheet from "../components/BottomSheet";
 import { useAuth } from "../context/AuthContext";
@@ -18,6 +18,20 @@ import {
 } from "../utils/firebaseService";
 
 const FILTERS = ["Hot", "New", "Top"];
+const DISCUSS_CATEGORIES = [
+  "General",
+  "Tech",
+  "Sports",
+  "Culture",
+  "Events",
+  "Help",
+  "Academic",
+  "Campus Life",
+  "Food",
+];
+
+const FAB_SIZE = 64;
+const FAB_MARGIN = 16;
 
 function FundaeCard({ f, theme }: { f: Fundae; theme: string }) {
   const { addToast, navigate } = useApp();
@@ -117,9 +131,90 @@ export default function Discuss() {
   const [newOpen, setNewOpen] = useState(false);
   const [newTitle, setNewTitle] = useState("");
   const [newBody, setNewBody] = useState("");
-  const [newFundaeType, _setNewFundaeType] = useState<"give" | "request">(
+  const [newTags, setNewTags] = useState("");
+  const [newCategory, setNewCategory] = useState("General");
+  const [newFundaeType, setNewFundaeType] = useState<"give" | "request">(
     "give",
   );
+  const [newFundaeTopic, setNewFundaeTopic] = useState("");
+  const [newFundaeTags, setNewFundaeTags] = useState("");
+
+  // Draggable FAB — uses bottom/right so it's always visible above the nav
+  const [fabPos, setFabPos] = useState({ right: FAB_MARGIN, bottom: 100 });
+
+  const drag = useRef({
+    active: false,
+    startX: 0,
+    startY: 0,
+    originRight: FAB_MARGIN,
+    originBottom: 100,
+  });
+
+  const setFabPosRef = useRef(setFabPos);
+  setFabPosRef.current = setFabPos;
+
+  const openModalRef = useRef(() => setNewOpen(true));
+  openModalRef.current = () => setNewOpen(true);
+
+  useEffect(() => {
+    const clamp = (v: number, lo: number, hi: number) =>
+      Math.min(hi, Math.max(lo, v));
+
+    const handleMove = (cx: number, cy: number) => {
+      if (!drag.current.active) return;
+      const dx = drag.current.startX - cx;
+      const dy = drag.current.startY - cy;
+      const newRight = clamp(
+        drag.current.originRight + dx,
+        0,
+        window.innerWidth - FAB_SIZE,
+      );
+      const newBottom = clamp(
+        drag.current.originBottom + dy,
+        80,
+        window.innerHeight - FAB_SIZE,
+      );
+      setFabPosRef.current({ right: newRight, bottom: newBottom });
+    };
+
+    const handleEnd = (cx: number, cy: number) => {
+      if (!drag.current.active) return;
+      const ddx = Math.abs(cx - drag.current.startX);
+      const ddy = Math.abs(cy - drag.current.startY);
+      drag.current.active = false;
+      if (ddx < 5 && ddy < 5) openModalRef.current();
+    };
+
+    const onMouseMove = (e: MouseEvent) => handleMove(e.clientX, e.clientY);
+    const onMouseUp = (e: MouseEvent) => handleEnd(e.clientX, e.clientY);
+    const onTouchMove = (e: TouchEvent) => {
+      if (drag.current.active) e.preventDefault();
+      handleMove(e.touches[0].clientX, e.touches[0].clientY);
+    };
+    const onTouchEnd = (e: TouchEvent) =>
+      handleEnd(e.changedTouches[0].clientX, e.changedTouches[0].clientY);
+
+    window.addEventListener("mousemove", onMouseMove);
+    window.addEventListener("mouseup", onMouseUp);
+    window.addEventListener("touchmove", onTouchMove, { passive: false });
+    window.addEventListener("touchend", onTouchEnd);
+    return () => {
+      window.removeEventListener("mousemove", onMouseMove);
+      window.removeEventListener("mouseup", onMouseUp);
+      window.removeEventListener("touchmove", onTouchMove);
+      window.removeEventListener("touchend", onTouchEnd);
+    };
+  }, []);
+
+  const startDrag = (cx: number, cy: number) => {
+    drag.current = {
+      active: true,
+      startX: cx,
+      startY: cy,
+      originRight: fabPos.right,
+      originBottom: fabPos.bottom,
+    };
+  };
 
   useEffect(() => {
     const unsubD = subscribeDiscussions((items) => setDiscussions(items));
@@ -154,8 +249,23 @@ export default function Discuss() {
     );
   };
 
+  const resetForm = () => {
+    setNewTitle("");
+    setNewBody("");
+    setNewTags("");
+    setNewCategory("General");
+    setNewFundaeType("give");
+    setNewFundaeTopic("");
+    setNewFundaeTags("");
+  };
+
   const surface = theme === "dark" ? "bg-[#1A1D27]" : "bg-white";
   const text2 = theme === "dark" ? "text-gray-400" : "text-gray-500";
+  const inputCls = `w-full px-4 py-3 rounded-2xl border text-sm outline-none ${
+    theme === "dark"
+      ? "bg-white/5 border-white/10 text-white"
+      : "bg-gray-50 border-gray-200"
+  }`;
 
   return (
     <div className="page-fade">
@@ -165,22 +275,34 @@ export default function Discuss() {
           theme === "dark" ? "border-white/5" : "border-gray-100"
         }`}
       >
-        <div className="flex gap-6">
-          {(["discussions", "fundaes"] as const).map((tab) => (
-            <button
-              type="button"
-              key={tab}
-              onClick={() => setMainTab(tab)}
-              className={`pb-3 text-sm font-semibold capitalize border-b-2 transition-all ${
-                mainTab === tab
-                  ? "border-purple-600 text-purple-600"
-                  : `border-transparent ${text2}`
-              }`}
-              data-ocid="discuss.tab"
-            >
-              {tab === "fundaes" ? "Fundaes 💡" : "Discussions"}
-            </button>
-          ))}
+        <div className="flex items-center justify-between">
+          <div className="flex gap-6">
+            {(["discussions", "fundaes"] as const).map((tab) => (
+              <button
+                type="button"
+                key={tab}
+                onClick={() => setMainTab(tab)}
+                className={`pb-3 text-sm font-semibold capitalize border-b-2 transition-all ${
+                  mainTab === tab
+                    ? "border-purple-600 text-purple-600"
+                    : `border-transparent ${text2}`
+                }`}
+                data-ocid="discuss.tab"
+              >
+                {tab === "fundaes" ? "Fundaes 💡" : "Discussions"}
+              </button>
+            ))}
+          </div>
+          {/* New Discussion / Fundae button in header */}
+          <button
+            type="button"
+            onClick={() => setNewOpen(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 mb-3 rounded-full btn-gradient text-white text-xs font-semibold shadow-lg shadow-purple-500/30 active:scale-95 transition-transform"
+            data-ocid="discuss.open_modal_button"
+          >
+            <Plus size={14} />
+            {mainTab === "fundaes" ? "New Fundae" : "New Discussion"}
+          </button>
         </div>
       </div>
 
@@ -207,6 +329,27 @@ export default function Discuss() {
               </button>
             ))}
           </div>
+
+          {discussions.length === 0 && (
+            <div
+              className="flex flex-col items-center justify-center py-16 gap-3"
+              data-ocid="discuss.empty_state"
+            >
+              <div className="w-16 h-16 rounded-full bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center">
+                <MessageSquare size={28} className="text-purple-500" />
+              </div>
+              <p className={`text-sm font-medium ${text2}`}>
+                No discussions yet. Start the first one!
+              </p>
+              <button
+                type="button"
+                onClick={() => setNewOpen(true)}
+                className="px-5 py-2.5 rounded-full btn-gradient text-white text-sm font-semibold"
+              >
+                + New Discussion
+              </button>
+            </div>
+          )}
 
           <div className="space-y-3 pb-4">
             {discussions.map((d) => (
@@ -348,46 +491,188 @@ export default function Discuss() {
         </div>
       )}
 
-      {/* FAB */}
+      {/* Draggable FAB — uses bottom/right so it never hides behind bottom nav */}
       <button
         type="button"
-        onClick={() => setNewOpen(true)}
-        className="fixed bottom-24 right-4 w-14 h-14 rounded-full btn-gradient shadow-2xl flex items-center justify-center z-30 transition-transform active:scale-90"
-        style={{ boxShadow: "0 8px 32px rgba(124,58,237,0.5)" }}
+        onMouseDown={(e) => {
+          e.preventDefault();
+          startDrag(e.clientX, e.clientY);
+        }}
+        onTouchStart={(e) => {
+          startDrag(e.touches[0].clientX, e.touches[0].clientY);
+        }}
+        className="fixed rounded-full btn-gradient flex items-center justify-center z-50 cursor-grab active:cursor-grabbing select-none"
+        style={{
+          right: fabPos.right,
+          bottom: fabPos.bottom,
+          width: FAB_SIZE,
+          height: FAB_SIZE,
+          touchAction: "none",
+          boxShadow:
+            "0 0 0 3px rgba(168,85,247,0.4), 0 8px 32px rgba(168,85,247,0.5)",
+        }}
         data-ocid="discuss.open_modal_button"
+        aria-label="New Discussion"
       >
-        <Plus size={26} className="text-white" />
+        <Plus size={28} className="text-white drop-shadow-lg" strokeWidth={3} />
       </button>
 
       <BottomSheet
         open={newOpen}
-        onClose={() => setNewOpen(false)}
+        onClose={() => {
+          setNewOpen(false);
+          resetForm();
+        }}
         title={mainTab === "fundaes" ? "New Fundae" : "New Discussion"}
       >
         <div className="space-y-3">
-          <input
-            value={newTitle}
-            onChange={(e) => setNewTitle(e.target.value)}
-            placeholder="Title"
-            className={`w-full px-4 py-3 rounded-2xl border text-sm outline-none ${
-              theme === "dark"
-                ? "bg-white/5 border-white/10"
-                : "bg-gray-50 border-gray-200"
-            }`}
-            data-ocid="discuss.input"
-          />
-          <textarea
-            value={newBody}
-            onChange={(e) => setNewBody(e.target.value)}
-            placeholder="What do you want to discuss?"
-            rows={3}
-            className={`w-full px-4 py-3 rounded-2xl border text-sm outline-none resize-none ${
-              theme === "dark"
-                ? "bg-white/5 border-white/10"
-                : "bg-gray-50 border-gray-200"
-            }`}
-            data-ocid="discuss.textarea"
-          />
+          {mainTab === "fundaes" ? (
+            <>
+              {/* Fundae type toggle */}
+              <div
+                className={`flex rounded-2xl p-1 ${
+                  theme === "dark" ? "bg-white/5" : "bg-gray-100"
+                }`}
+              >
+                {(["give", "request"] as const).map((t) => (
+                  <button
+                    type="button"
+                    key={t}
+                    onClick={() => setNewFundaeType(t)}
+                    className={`flex-1 py-2 rounded-xl text-sm font-semibold transition-all ${
+                      newFundaeType === t
+                        ? "bg-white dark:bg-gray-800 shadow-sm text-purple-600"
+                        : text2
+                    }`}
+                  >
+                    {t === "give" ? "Give Fundae 💡" : "Request Help 🙋"}
+                  </button>
+                ))}
+              </div>
+
+              <div>
+                <p className={`text-xs font-semibold mb-1 block ${text2}`}>
+                  Title *
+                </p>
+                <input
+                  value={newTitle}
+                  onChange={(e) => setNewTitle(e.target.value)}
+                  placeholder="e.g. DSA Interview Tips"
+                  className={inputCls}
+                  data-ocid="discuss.input"
+                />
+              </div>
+
+              <div>
+                <p className={`text-xs font-semibold mb-1 block ${text2}`}>
+                  Subject / Topic
+                </p>
+                <input
+                  value={newFundaeTopic}
+                  onChange={(e) => setNewFundaeTopic(e.target.value)}
+                  placeholder="e.g. Machine Learning, DSA"
+                  className={inputCls}
+                />
+              </div>
+
+              <div>
+                <p className={`text-xs font-semibold mb-1 block ${text2}`}>
+                  Description
+                </p>
+                <textarea
+                  value={newBody}
+                  onChange={(e) => setNewBody(e.target.value)}
+                  placeholder={
+                    newFundaeType === "give"
+                      ? "Describe what you can help with..."
+                      : "Describe what you need help with..."
+                  }
+                  rows={3}
+                  className={`${inputCls} resize-none`}
+                  data-ocid="discuss.textarea"
+                />
+              </div>
+
+              <div>
+                <p className={`text-xs font-semibold mb-1 block ${text2}`}>
+                  Tags
+                </p>
+                <input
+                  value={newFundaeTags}
+                  onChange={(e) => setNewFundaeTags(e.target.value)}
+                  placeholder="Comma-separated, e.g. ml, python, exam"
+                  className={inputCls}
+                />
+              </div>
+            </>
+          ) : (
+            <>
+              <div>
+                <p className={`text-xs font-semibold mb-1 block ${text2}`}>
+                  Discussion Title *
+                </p>
+                <input
+                  value={newTitle}
+                  onChange={(e) => setNewTitle(e.target.value)}
+                  placeholder="What do you want to discuss?"
+                  className={inputCls}
+                  data-ocid="discuss.input"
+                />
+              </div>
+
+              <div>
+                <p className={`text-xs font-semibold mb-1 block ${text2}`}>
+                  Body / Description
+                </p>
+                <textarea
+                  value={newBody}
+                  onChange={(e) => setNewBody(e.target.value)}
+                  placeholder="Share your thoughts, questions, or ideas..."
+                  rows={4}
+                  className={`${inputCls} resize-none`}
+                  data-ocid="discuss.textarea"
+                />
+              </div>
+
+              <div>
+                <p className={`text-xs font-semibold mb-1 block ${text2}`}>
+                  Tags
+                </p>
+                <input
+                  value={newTags}
+                  onChange={(e) => setNewTags(e.target.value)}
+                  placeholder="Comma-separated, e.g. coding, iitm, exam"
+                  className={inputCls}
+                />
+              </div>
+
+              {/* Category chips */}
+              <div>
+                <p className={`text-xs font-semibold mb-2 block ${text2}`}>
+                  Category
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {DISCUSS_CATEGORIES.map((cat) => (
+                    <button
+                      type="button"
+                      key={cat}
+                      onClick={() => setNewCategory(cat)}
+                      className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${
+                        newCategory === cat
+                          ? "bg-purple-600 text-white shadow-md"
+                          : theme === "dark"
+                            ? "bg-white/10 text-gray-300"
+                            : "bg-gray-100 text-gray-600"
+                      }`}
+                    >
+                      {cat}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </>
+          )}
+
           <button
             type="button"
             onClick={async () => {
@@ -397,42 +682,51 @@ export default function Discuss() {
               const userId = userProfile?.id ?? "";
               try {
                 if (mainTab === "fundaes") {
+                  const tags = newFundaeTags
+                    .split(",")
+                    .map((t) => t.trim())
+                    .filter(Boolean);
                   await fbAddFundae({
                     type: newFundaeType,
                     username,
                     avatar,
                     title: newTitle.trim(),
                     description: newBody.trim(),
-                    tags: [],
+                    tags,
                     time: "just now",
                   });
                 } else {
+                  const tags = newTags
+                    .split(",")
+                    .map((t) => t.trim())
+                    .filter(Boolean);
                   await fbAddDiscussion({
                     userId,
                     username,
                     avatar,
                     title: newTitle.trim(),
                     body: newBody.trim(),
-                    tags: [],
+                    tags,
+                    category: newCategory,
                     upvotes: 0,
                     downvotes: 0,
                     voted: null,
                     comments: [],
                     time: "just now",
-                  });
+                  } as unknown as Omit<Discussion, "id">);
                 }
-                addToast("Posted!", "success");
+                addToast("Posted! 🎉", "success");
               } catch {
                 addToast("Failed to post", "error");
               }
-              setNewTitle("");
-              setNewBody("");
+              resetForm();
               setNewOpen(false);
             }}
-            className="w-full py-3.5 rounded-2xl text-white font-semibold text-sm btn-gradient"
+            disabled={!newTitle.trim()}
+            className="w-full py-3.5 rounded-2xl text-white font-semibold text-sm btn-gradient disabled:opacity-40 mt-1"
             data-ocid="discuss.submit_button"
           >
-            Post
+            {mainTab === "fundaes" ? "Post Fundae 💡" : "Post Discussion 🚀"}
           </button>
         </div>
       </BottomSheet>

@@ -1,5 +1,5 @@
-import { Clock, MapPin, Plus, Users } from "lucide-react";
-import { useEffect, useState } from "react";
+import { Calendar, Clock, MapPin, Plus, Tag, Users } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import { useApp } from "../App";
 import BottomSheet from "../components/BottomSheet";
 import { useAuth } from "../context/AuthContext";
@@ -8,7 +8,6 @@ import {
   addPlan as fbAddPlan,
   deletePlan as fbDeletePlan,
   updatePlan as fbUpdatePlan,
-  getUserById,
   subscribePlans,
 } from "../utils/firebaseService";
 
@@ -21,7 +20,18 @@ const CATEGORIES = [
   "Tech",
   "Social",
 ];
-const PLAN_CATEGORIES = ["Sports", "Study", "Food", "Music", "Tech", "Social"];
+const PLAN_CATEGORIES = [
+  "Sports",
+  "Study",
+  "Food",
+  "Music",
+  "Tech",
+  "Social",
+  "Travel",
+  "Culture",
+  "Gaming",
+  "Random",
+];
 const CATEGORY_COLORS: Record<string, string> = {
   Sports: "from-orange-400 to-red-500",
   Study: "from-blue-400 to-indigo-500",
@@ -29,19 +39,26 @@ const CATEGORY_COLORS: Record<string, string> = {
   Music: "from-pink-400 to-purple-500",
   Tech: "from-cyan-400 to-blue-500",
   Social: "from-green-400 to-teal-500",
+  Travel: "from-sky-400 to-cyan-500",
+  Culture: "from-rose-400 to-pink-500",
+  Gaming: "from-violet-400 to-purple-500",
+  Random: "from-amber-400 to-orange-500",
   All: "from-purple-500 to-pink-500",
 };
+
+const FAB_SIZE = 64;
+const FAB_MARGIN = 16;
 
 export default function Plans() {
   const { theme, addToast, navigate } = useApp();
   const { userProfile } = useAuth();
   const [plans, setPlans] = useState<Plan[]>([]);
 
-  // Subscribe to Firestore plans
   useEffect(() => {
     const unsub = subscribePlans((firestorePlans) => setPlans(firestorePlans));
     return unsub;
   }, []);
+
   const [selected, setSelected] = useState("All");
   const [createOpen, setCreateOpen] = useState(false);
 
@@ -51,6 +68,85 @@ export default function Plans() {
   const [newLocation, setNewLocation] = useState("");
   const [newSlots, setNewSlots] = useState("");
   const [newCategory, setNewCategory] = useState("Social");
+  const [newDate, setNewDate] = useState("");
+  const [newTime, setNewTime] = useState("");
+
+  // Draggable FAB — uses bottom/right so it's always visible above the nav
+  const [fabPos, setFabPos] = useState({ right: FAB_MARGIN, bottom: 100 });
+
+  const drag = useRef({
+    active: false,
+    startX: 0,
+    startY: 0,
+    originRight: FAB_MARGIN,
+    originBottom: 100,
+  });
+
+  const setFabPosRef = useRef(setFabPos);
+  setFabPosRef.current = setFabPos;
+
+  const openModalRef = useRef(() => setCreateOpen(true));
+  openModalRef.current = () => setCreateOpen(true);
+
+  useEffect(() => {
+    const clamp = (v: number, lo: number, hi: number) =>
+      Math.min(hi, Math.max(lo, v));
+
+    const handleMove = (cx: number, cy: number) => {
+      if (!drag.current.active) return;
+      const dx = drag.current.startX - cx;
+      const dy = drag.current.startY - cy;
+      const newRight = clamp(
+        drag.current.originRight + dx,
+        0,
+        window.innerWidth - FAB_SIZE,
+      );
+      const newBottom = clamp(
+        drag.current.originBottom + dy,
+        80,
+        window.innerHeight - FAB_SIZE,
+      );
+      setFabPosRef.current({ right: newRight, bottom: newBottom });
+    };
+
+    const handleEnd = (cx: number, cy: number) => {
+      if (!drag.current.active) return;
+      const ddx = Math.abs(cx - drag.current.startX);
+      const ddy = Math.abs(cy - drag.current.startY);
+      drag.current.active = false;
+      if (ddx < 5 && ddy < 5) openModalRef.current();
+    };
+
+    const onMouseMove = (e: MouseEvent) => handleMove(e.clientX, e.clientY);
+    const onMouseUp = (e: MouseEvent) => handleEnd(e.clientX, e.clientY);
+    const onTouchMove = (e: TouchEvent) => {
+      if (drag.current.active) e.preventDefault();
+      handleMove(e.touches[0].clientX, e.touches[0].clientY);
+    };
+    const onTouchEnd = (e: TouchEvent) =>
+      handleEnd(e.changedTouches[0].clientX, e.changedTouches[0].clientY);
+
+    window.addEventListener("mousemove", onMouseMove);
+    window.addEventListener("mouseup", onMouseUp);
+    window.addEventListener("touchmove", onTouchMove, { passive: false });
+    window.addEventListener("touchend", onTouchEnd);
+    return () => {
+      window.removeEventListener("mousemove", onMouseMove);
+      window.removeEventListener("mouseup", onMouseUp);
+      window.removeEventListener("touchmove", onTouchMove);
+      window.removeEventListener("touchend", onTouchEnd);
+    };
+  }, []);
+
+  const startDrag = (cx: number, cy: number) => {
+    drag.current = {
+      active: true,
+      startX: cx,
+      startY: cy,
+      originRight: fabPos.right,
+      originBottom: fabPos.bottom,
+    };
+  };
 
   const filtered =
     selected === "All" ? plans : plans.filter((p) => p.category === selected);
@@ -100,7 +196,10 @@ export default function Plans() {
       joined: 1,
       isJoined: false,
       organizer,
-      time: "Today",
+      time:
+        newDate && newTime
+          ? `${newDate} at ${newTime}`
+          : newDate || newTime || "TBD",
       location: newLocation.trim() || "TBD",
     };
     try {
@@ -113,6 +212,8 @@ export default function Plans() {
     setNewDesc("");
     setNewLocation("");
     setNewSlots("");
+    setNewDate("");
+    setNewTime("");
     setNewCategory("Social");
     setCreateOpen(false);
   };
@@ -122,7 +223,6 @@ export default function Plans() {
       navigate("profile");
       return;
     }
-    // Try to find user by username in Firestore (simplified: use username as userId search)
     navigate("other-profile", { userId: organizer });
   };
 
@@ -137,7 +237,19 @@ export default function Plans() {
   return (
     <>
       <div className="page-fade px-4 pt-4 pb-4">
-        <h2 className="text-xl font-bold mb-4">Campus Plans</h2>
+        {/* Header row with Add Plan button */}
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-xl font-bold">Campus Plans</h2>
+          <button
+            type="button"
+            onClick={() => setCreateOpen(true)}
+            className="flex items-center gap-1.5 px-4 py-2 rounded-full btn-gradient text-white text-sm font-semibold shadow-lg shadow-purple-500/30 active:scale-95 transition-transform"
+            data-ocid="plans.open_modal_button"
+          >
+            <Plus size={16} />
+            Add Plan
+          </button>
+        </div>
 
         {/* Category filter chips */}
         <div className="flex gap-2 overflow-x-auto pb-3 -mx-4 px-4">
@@ -161,7 +273,28 @@ export default function Plans() {
         </div>
 
         {/* Plan cards */}
-        <div className="space-y-4 mt-2 pb-24">
+        <div className="space-y-4 mt-2 pb-32">
+          {filtered.length === 0 && (
+            <div
+              className="flex flex-col items-center justify-center py-16 gap-3"
+              data-ocid="plans.empty_state"
+            >
+              <div className="w-16 h-16 rounded-full bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center">
+                <Calendar size={28} className="text-purple-500" />
+              </div>
+              <p className={`text-sm font-medium ${text2}`}>
+                No plans yet. Create the first one!
+              </p>
+              <button
+                type="button"
+                onClick={() => setCreateOpen(true)}
+                className="px-5 py-2.5 rounded-full btn-gradient text-white text-sm font-semibold"
+              >
+                + Create Plan
+              </button>
+            </div>
+          )}
+
           {filtered.map((plan, idx) => (
             <div
               key={plan.id}
@@ -170,7 +303,9 @@ export default function Plans() {
             >
               {/* Color header */}
               <div
-                className={`bg-gradient-to-r ${CATEGORY_COLORS[plan.category] || CATEGORY_COLORS.All} h-2`}
+                className={`bg-gradient-to-r ${
+                  CATEGORY_COLORS[plan.category] || CATEGORY_COLORS.All
+                } h-2`}
               />
 
               <div className="p-4">
@@ -178,7 +313,9 @@ export default function Plans() {
                   <div className="flex-1">
                     <div className="flex items-center gap-2 mb-1">
                       <span
-                        className={`text-xs px-2 py-0.5 rounded-full bg-gradient-to-r ${CATEGORY_COLORS[plan.category]} text-white font-medium`}
+                        className={`text-xs px-2 py-0.5 rounded-full bg-gradient-to-r ${
+                          CATEGORY_COLORS[plan.category]
+                        } text-white font-medium`}
                       >
                         {plan.category}
                       </span>
@@ -188,7 +325,9 @@ export default function Plans() {
                         </span>
                       )}
                     </div>
-                    <h3 className="font-bold text-base">{plan.title}</h3>
+                    <h3 className="font-bold text-base">
+                      {plan.title || "Untitled Plan"}
+                    </h3>
                     <p className={`text-sm ${text2} mt-1`}>
                       {plan.description}
                     </p>
@@ -199,6 +338,10 @@ export default function Plans() {
                 <div
                   className={`flex items-center gap-4 mt-3 text-xs ${text2}`}
                 >
+                  <span className="flex items-center gap-1 font-semibold text-purple-500">
+                    <Tag size={12} />
+                    {plan.title || "Untitled Plan"}
+                  </span>
                   <span className="flex items-center gap-1">
                     <Clock size={12} />
                     {plan.time}
@@ -252,7 +395,9 @@ export default function Plans() {
                     }`}
                   >
                     <div
-                      className={`h-2 rounded-full transition-all bg-gradient-to-r ${CATEGORY_COLORS[plan.category]}`}
+                      className={`h-2 rounded-full transition-all bg-gradient-to-r ${
+                        CATEGORY_COLORS[plan.category]
+                      }`}
                       style={{
                         width: `${Math.min(100, (plan.joined / plan.slots) * 100)}%`,
                       }}
@@ -264,7 +409,9 @@ export default function Plans() {
                 <button
                   type="button"
                   onClick={() => openOrganizerProfile(plan.organizer)}
-                  className={`flex items-center gap-1.5 mt-3 cursor-pointer ${text2} hover:opacity-80 transition-opacity`}
+                  className={`flex items-center gap-1.5 mt-3 cursor-pointer ${
+                    text2
+                  } hover:opacity-80 transition-opacity`}
                 >
                   <img
                     src={`https://picsum.photos/seed/${plan.organizer}/100/100`}
@@ -302,15 +449,30 @@ export default function Plans() {
         </div>
       </div>
 
-      {/* FAB — fixed outside scroll container, always visible */}
+      {/* Draggable FAB — uses bottom/right so it never hides behind bottom nav */}
       <button
         type="button"
-        onClick={() => setCreateOpen(true)}
-        className="fixed bottom-24 right-4 w-14 h-14 rounded-full btn-gradient shadow-2xl flex items-center justify-center z-40 transition-transform active:scale-90"
-        style={{ boxShadow: "0 8px 32px rgba(124,58,237,0.5)" }}
+        onMouseDown={(e) => {
+          e.preventDefault();
+          startDrag(e.clientX, e.clientY);
+        }}
+        onTouchStart={(e) => {
+          startDrag(e.touches[0].clientX, e.touches[0].clientY);
+        }}
+        className="fixed rounded-full btn-gradient flex items-center justify-center z-50 cursor-grab active:cursor-grabbing select-none shadow-2xl shadow-purple-500/50"
+        style={{
+          right: fabPos.right,
+          bottom: fabPos.bottom,
+          width: FAB_SIZE,
+          height: FAB_SIZE,
+          touchAction: "none",
+          boxShadow:
+            "0 0 0 3px rgba(168,85,247,0.4), 0 8px 32px rgba(168,85,247,0.5)",
+        }}
         data-ocid="plans.open_modal_button"
+        aria-label="Add Plan"
       >
-        <Plus size={26} className="text-white" />
+        <Plus size={28} className="text-white drop-shadow-lg" strokeWidth={3} />
       </button>
 
       <BottomSheet
@@ -319,62 +481,135 @@ export default function Plans() {
         title="Create a Plan"
       >
         <div className="space-y-3">
-          {/* Title */}
-          <input
-            value={newTitle}
-            onChange={(e) => setNewTitle(e.target.value)}
-            placeholder="Plan title"
-            className={inputCls}
-            data-ocid="plans.input"
-          />
-
-          {/* Description */}
-          <textarea
-            value={newDesc}
-            onChange={(e) => setNewDesc(e.target.value)}
-            placeholder="Description..."
-            rows={2}
-            className={`${inputCls} resize-none`}
-            data-ocid="plans.textarea"
-          />
-
-          {/* Location */}
-          <div className="relative">
-            <MapPin
-              size={15}
-              className={`absolute left-3.5 top-1/2 -translate-y-1/2 ${
-                theme === "dark" ? "text-gray-400" : "text-gray-400"
+          {/* Plan Name */}
+          <div>
+            <p
+              className={`text-xs font-semibold mb-1 block ${
+                theme === "dark" ? "text-gray-400" : "text-gray-500"
               }`}
-            />
+            >
+              Plan Name *
+            </p>
             <input
-              value={newLocation}
-              onChange={(e) => setNewLocation(e.target.value)}
-              placeholder="Location (e.g. SAC Ground, CLT 217)"
-              className={`${inputCls} pl-9`}
+              value={newTitle}
+              onChange={(e) => setNewTitle(e.target.value)}
+              placeholder="e.g. Cricket at SAC Ground"
+              className={inputCls}
+              data-ocid="plans.input"
             />
           </div>
 
+          {/* Description */}
+          <div>
+            <p
+              className={`text-xs font-semibold mb-1 block ${
+                theme === "dark" ? "text-gray-400" : "text-gray-500"
+              }`}
+            >
+              Description
+            </p>
+            <textarea
+              value={newDesc}
+              onChange={(e) => setNewDesc(e.target.value)}
+              placeholder="Tell people what this plan is about..."
+              rows={2}
+              className={`${inputCls} resize-none`}
+              data-ocid="plans.textarea"
+            />
+          </div>
+
+          {/* Date & Time */}
+          <div>
+            <p
+              className={`text-xs font-semibold mb-1 block ${
+                theme === "dark" ? "text-gray-400" : "text-gray-500"
+              }`}
+            >
+              Date & Time
+            </p>
+            <div className="grid grid-cols-2 gap-2">
+              <div className="relative">
+                <Calendar
+                  size={15}
+                  className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"
+                />
+                <input
+                  type="date"
+                  value={newDate}
+                  onChange={(e) => setNewDate(e.target.value)}
+                  className={`${inputCls} pl-9`}
+                />
+              </div>
+              <div className="relative">
+                <Clock
+                  size={15}
+                  className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"
+                />
+                <input
+                  type="time"
+                  value={newTime}
+                  onChange={(e) => setNewTime(e.target.value)}
+                  className={`${inputCls} pl-9`}
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Location */}
+          <div>
+            <p
+              className={`text-xs font-semibold mb-1 block ${
+                theme === "dark" ? "text-gray-400" : "text-gray-500"
+              }`}
+            >
+              Location
+            </p>
+            <div className="relative">
+              <MapPin
+                size={15}
+                className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"
+              />
+              <input
+                value={newLocation}
+                onChange={(e) => setNewLocation(e.target.value)}
+                placeholder="e.g. SAC Ground, CLT 217"
+                className={`${inputCls} pl-9`}
+              />
+            </div>
+          </div>
+
           {/* Slots */}
-          <div className="relative">
-            <Users
-              size={15}
-              className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400"
-            />
-            <input
-              value={newSlots}
-              onChange={(e) => setNewSlots(e.target.value)}
-              placeholder="Max slots (e.g. 10)"
-              type="number"
-              min={2}
-              max={50}
-              className={`${inputCls} pl-9`}
-            />
+          <div>
+            <p
+              className={`text-xs font-semibold mb-1 block ${
+                theme === "dark" ? "text-gray-400" : "text-gray-500"
+              }`}
+            >
+              Number of Slots
+            </p>
+            <div className="relative">
+              <Users
+                size={15}
+                className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"
+              />
+              <input
+                value={newSlots}
+                onChange={(e) => setNewSlots(e.target.value)}
+                placeholder="Max slots (2–50)"
+                type="number"
+                min={2}
+                max={50}
+                className={`${inputCls} pl-9`}
+              />
+            </div>
           </div>
 
           {/* Category picker */}
           <div>
             <p
-              className={`text-xs mb-2 font-medium ${theme === "dark" ? "text-gray-400" : "text-gray-500"}`}
+              className={`text-xs font-semibold mb-2 block ${
+                theme === "dark" ? "text-gray-400" : "text-gray-500"
+              }`}
             >
               Category
             </p>
@@ -386,7 +621,7 @@ export default function Plans() {
                   onClick={() => setNewCategory(cat)}
                   className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${
                     newCategory === cat
-                      ? `bg-gradient-to-r ${CATEGORY_COLORS[cat]} text-white shadow-md`
+                      ? `bg-gradient-to-r ${CATEGORY_COLORS[cat] ?? "from-purple-500 to-pink-500"} text-white shadow-md`
                       : theme === "dark"
                         ? "bg-white/10 text-gray-300"
                         : "bg-gray-100 text-gray-600"
@@ -402,10 +637,10 @@ export default function Plans() {
             type="button"
             onClick={createPlan}
             disabled={!newTitle.trim()}
-            className="w-full py-3.5 rounded-2xl text-white font-semibold text-sm btn-gradient disabled:opacity-40"
+            className="w-full py-3.5 rounded-2xl text-white font-semibold text-sm btn-gradient disabled:opacity-40 mt-1"
             data-ocid="plans.submit_button"
           >
-            Create Plan
+            Create Plan 🎉
           </button>
         </div>
       </BottomSheet>
