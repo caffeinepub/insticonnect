@@ -133,6 +133,7 @@ export default function Discuss() {
   const [newBody, setNewBody] = useState("");
   const [newTags, setNewTags] = useState("");
   const [newCategory, setNewCategory] = useState("General");
+  const [selectedCategory, setSelectedCategory] = useState("All");
   const [newFundaeType, setNewFundaeType] = useState<"give" | "request">(
     "give",
   );
@@ -271,7 +272,7 @@ export default function Discuss() {
     <div className="page-fade">
       {/* Main tabs */}
       <div
-        className={`${surface} sticky top-0 z-20 px-4 pt-4 pb-0 border-b ${
+        className={`${surface} sticky top-0 z-10 px-4 pt-4 pb-0 border-b ${
           theme === "dark" ? "border-white/5" : "border-gray-100"
         }`}
       >
@@ -308,8 +309,8 @@ export default function Discuss() {
 
       {mainTab === "discussions" && (
         <div className="px-4 pt-3">
-          {/* Filter chips */}
-          <div className="flex gap-2 mb-4 overflow-x-auto">
+          {/* Sort filter chips */}
+          <div className="flex gap-2 mb-2 overflow-x-auto">
             {FILTERS.map((f) => (
               <button
                 type="button"
@@ -326,6 +327,25 @@ export default function Discuss() {
               >
                 {f === "Hot" && <TrendingUp size={12} />}
                 {f}
+              </button>
+            ))}
+          </div>
+          {/* Category filter chips */}
+          <div className="flex gap-2 mb-4 overflow-x-auto">
+            {["All", ...DISCUSS_CATEGORIES].map((cat) => (
+              <button
+                type="button"
+                key={cat}
+                onClick={() => setSelectedCategory(cat)}
+                className={`flex-shrink-0 px-3 py-1 rounded-full text-xs font-semibold transition-all ${
+                  selectedCategory === cat
+                    ? "bg-purple-500/20 text-purple-500 ring-1 ring-purple-500/40"
+                    : theme === "dark"
+                      ? "bg-white/5 text-gray-400"
+                      : "bg-gray-50 text-gray-500"
+                }`}
+              >
+                {cat}
               </button>
             ))}
           </div>
@@ -352,106 +372,116 @@ export default function Discuss() {
           )}
 
           <div className="space-y-3 pb-4">
-            {discussions.map((d) => (
-              <button
-                type="button"
-                key={d.id}
-                onClick={() =>
-                  navigate("discuss-detail", { discussionId: d.id })
-                }
-                className={`w-full text-left ${surface} rounded-2xl p-4 shadow-md card-hover block`}
-              >
-                <div className="flex gap-3">
-                  {/* Votes */}
-                  <div className="flex flex-col items-center gap-1 flex-shrink-0">
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        vote(d.id, "up");
-                      }}
-                      className={`p-1 rounded-lg transition-all ${
-                        d.voted === "up" ? "text-orange-500" : text2
-                      }`}
-                    >
-                      <ChevronUp size={18} />
-                    </button>
-                    <span
-                      className={`text-xs font-bold ${
-                        d.voted === "up"
-                          ? "text-orange-500"
-                          : d.voted === "down"
-                            ? "text-blue-500"
-                            : ""
-                      }`}
-                    >
-                      {d.upvotes - d.downvotes}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        vote(d.id, "down");
-                      }}
-                      className={`p-1 rounded-lg transition-all ${
-                        d.voted === "down" ? "text-blue-500" : text2
-                      }`}
-                    >
-                      <ChevronDown size={18} />
-                    </button>
-                  </div>
-
-                  <div className="flex-1 min-w-0">
-                    <h3 className="font-semibold text-sm leading-tight">
-                      {d.title}
-                    </h3>
-                    <p className={`text-xs ${text2} mt-1 line-clamp-2`}>
-                      {d.body}
-                    </p>
-                    <div className="flex flex-wrap gap-1.5 mt-2">
-                      {d.tags.map((t) => (
-                        <span
-                          key={t}
-                          className={`text-[10px] px-2 py-0.5 rounded-full ${
-                            theme === "dark"
-                              ? "bg-white/10 text-gray-300"
-                              : "bg-gray-100 text-gray-600"
-                          }`}
-                        >
-                          #{t}
-                        </span>
-                      ))}
-                    </div>
-                    <div
-                      className={`flex items-center gap-4 mt-2 text-[11px] ${text2}`}
-                    >
-                      <span className="flex items-center gap-1">
-                        <MessageSquare size={11} />
-                        {d.comments.length} comments
+            {discussions
+              .filter(
+                (d) =>
+                  selectedCategory === "All" || d.category === selectedCategory,
+              )
+              .map((d) => (
+                <button
+                  type="button"
+                  key={d.id}
+                  onClick={() =>
+                    navigate("discuss-detail", { discussionId: d.id })
+                  }
+                  className={`w-full text-left ${surface} rounded-2xl p-4 shadow-md card-hover block`}
+                >
+                  <div className="flex gap-3">
+                    {/* Votes */}
+                    <div className="flex flex-col items-center gap-1 flex-shrink-0">
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          vote(d.id, "up");
+                        }}
+                        className={`p-1 rounded-lg transition-all ${
+                          d.voted === "up" ? "text-orange-500" : text2
+                        }`}
+                      >
+                        <ChevronUp size={18} />
+                      </button>
+                      <span
+                        className={`text-xs font-bold ${
+                          d.voted === "up"
+                            ? "text-orange-500"
+                            : d.voted === "down"
+                              ? "text-blue-500"
+                              : ""
+                        }`}
+                      >
+                        {d.upvotes - d.downvotes}
                       </span>
                       <button
                         type="button"
                         onClick={(e) => {
                           e.stopPropagation();
-                          navigate("other-profile", {
-                            userId: d.userId || d.username,
-                          });
+                          vote(d.id, "down");
                         }}
-                        className="flex items-center gap-1 hover:opacity-80 transition-opacity cursor-pointer"
+                        className={`p-1 rounded-lg transition-all ${
+                          d.voted === "down" ? "text-blue-500" : text2
+                        }`}
                       >
-                        <img
-                          src={d.avatar}
-                          alt={d.username}
-                          className="w-5 h-5 rounded-full object-cover"
-                        />
-                        <span>by {d.username}</span>
+                        <ChevronDown size={18} />
                       </button>
-                      <span>{d.time} ago</span>
+                    </div>
+
+                    <div className="flex-1 min-w-0">
+                      {d.category && (
+                        <span className="inline-block text-[10px] px-2 py-0.5 rounded-full bg-purple-600/20 text-purple-500 font-semibold mb-1">
+                          {d.category}
+                        </span>
+                      )}
+                      <h3 className="font-semibold text-sm leading-tight">
+                        {d.title}
+                      </h3>
+                      <p className={`text-xs ${text2} mt-1 line-clamp-2`}>
+                        {d.body}
+                      </p>
+                      <div className="flex flex-wrap gap-1.5 mt-2">
+                        {d.tags.map((t) => (
+                          <span
+                            key={t}
+                            className={`text-[10px] px-2 py-0.5 rounded-full ${
+                              theme === "dark"
+                                ? "bg-white/10 text-gray-300"
+                                : "bg-gray-100 text-gray-600"
+                            }`}
+                          >
+                            #{t}
+                          </span>
+                        ))}
+                      </div>
+                      <div
+                        className={`flex items-center gap-4 mt-2 text-[11px] ${text2}`}
+                      >
+                        <span className="flex items-center gap-1">
+                          <MessageSquare size={11} />
+                          {d.comments.length} comments
+                        </span>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            navigate("other-profile", {
+                              userId: d.userId || d.username,
+                            });
+                          }}
+                          className="flex items-center gap-1 hover:opacity-80 transition-opacity cursor-pointer"
+                        >
+                          <img
+                            src={d.avatar}
+                            alt={d.username}
+                            className="w-5 h-5 rounded-full object-cover"
+                          />
+                          <span>by {d.username}</span>
+                        </button>
+                        <span>{d.time} ago</span>
+                      </div>
                     </div>
                   </div>
-                </div>
-              </button>
-            ))}
+                </button>
+              ))}
           </div>
         </div>
       )}

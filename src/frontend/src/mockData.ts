@@ -80,6 +80,7 @@ export interface Discussion {
   title: string;
   body: string;
   tags: string[];
+  category?: string;
   upvotes: number;
   downvotes: number;
   voted: "up" | "down" | null;
